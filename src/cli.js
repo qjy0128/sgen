@@ -18,7 +18,8 @@ const USAGE = `用法：sgen <命令> [参数]
   video <提示词> [选项]        生成视频（默认 Agnes agnes-video-2.5-flash，自动等待出片）
   status <video_id> [选项]     查询/续等/下载视频任务
   models                       查看全部内置模型与能力限制
-  config init|set|list|test    管理配置与 Key（init 引导创建 / set 修改 / list 查看 / test 连通检查）
+  config init|set|list|test    管理配置与 Key（首次用 init；set 示例：sgen config set agnes.region china，
+                               全部可设项与含义运行 sgen config 查看）
 
 image 选项：
   --model <名称>     指定模型（sgen models 查看可选值）
@@ -40,7 +41,10 @@ video 选项：
   --num-frames <数>  v2.0 帧数（8n+1，≤441）
   --frame-rate <数>  v2.0 帧率（1–60）
   --no-wait          提交后立即返回 video_id，稍后用 sgen status 取片
-  --timeout <秒>     等待上限（默认 600）`
+  --timeout <秒>     等待上限（默认 600）
+
+提示：--model / --size / --ratio 的可选值各模型不同，运行 sgen models 查看；
+     填错会在本地直接报错并列出该模型支持的全部取值（不浪费 API 调用）。`
 
 async function imageCmd(argv) {
   const args = parseArgs(argv, {

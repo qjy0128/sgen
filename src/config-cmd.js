@@ -72,28 +72,55 @@ async function configInit() {
   return 0
 }
 
+// 可设项注册表：解析函数 + 帮助文案（含义与示例），帮助文本由同一份数据渲染
 const SETTABLE = {
-  'sensenova.api_keys': (v) => splitKeys(v),
-  'agnes.api_keys': (v) => splitKeys(v),
-  'sensenova.base_url': (v) => v,
-  'agnes.base_url': (v) => v,
-  'agnes.region': (v) => {
-    if (v !== 'international' && v !== 'china') {
-      throw usageErr('agnes.region 可选值：international、china')
-    }
-    return v
+  'sensenova.api_keys': {
+    parse: (v) => splitKeys(v),
+    desc: '商汤 Key 列表，多把用英文逗号分隔',
+    example: 'sgen config set sensenova.api_keys sk-aaa,sk-bbb',
   },
+  'agnes.api_keys': {
+    parse: (v) => splitKeys(v),
+    desc: 'Agnes Key 列表，多把用英文逗号分隔',
+    example: 'sgen config set agnes.api_keys ak-aaa,ak-bbb',
+  },
+  'agnes.region': {
+    parse: (v) => {
+      if (v !== 'international' && v !== 'china') {
+        throw usageErr('agnes.region 可选值：international（默认，国际版域名）/ china（中国版域名）')
+      }
+      return v
+    },
+    desc: '接入域名：international=国际版（默认）/ china=中国版\n                         只影响请求走哪个域名，功能完全一致，Key 目前通用',
+    example: 'sgen config set agnes.region china',
+  },
+  'sensenova.base_url': {
+    parse: (v) => v,
+    desc: '进阶：覆写商汤接口地址',
+    example: 'sgen config set sensenova.base_url https://token.sensenova.cn/v1',
+  },
+  'agnes.base_url': {
+    parse: (v) => v,
+    desc: '进阶：覆写 Agnes 接口地址',
+    example: 'sgen config set agnes.base_url https://apihub.agnes-ai.com/v1',
+  },
+}
+
+function renderSettable() {
+  return Object.entries(SETTABLE)
+    .map(([key, def]) => `    ${key.padEnd(20)} ${def.desc}\n                         例：${def.example}`)
+    .join('\n')
 }
 
 async function configSet(keyPath, value) {
   if (!keyPath || value === undefined) {
-    throw usageErr(`用法：sgen config set <路径> <值>\n可设置：${Object.keys(SETTABLE).join('、')}`)
+    throw usageErr(`用法：sgen config set <路径> <值>\n${renderSettable()}`)
   }
-  const parse = SETTABLE[keyPath]
-  if (!parse) {
-    throw usageErr(`不可设置的路径：${keyPath}\n可设置：${Object.keys(SETTABLE).join('、')}`)
+  const item = SETTABLE[keyPath]
+  if (!item) {
+    throw usageErr(`不可设置的路径：${keyPath}\n${renderSettable()}`)
   }
-  const parsed = parse(value)
+  const parsed = item.parse(value)
 
   const raw = readRawConfig()
   const providers = raw.providers ?? {}
@@ -162,6 +189,13 @@ export async function configCmd(argv) {
   if (sub === 'list') return configList()
   if (sub === 'test') return configTest()
   throw usageErr(
-    `用法：sgen config <init|set|list|test>\n  init  交互式引导创建配置\n  set   设置单项（如 agnes.region china）\n  list  查看配置（Key 打码）\n  test  逐把 Key 连通性检查`,
+    [
+      '用法：sgen config <子命令>',
+      '  init  交互式引导创建配置（推荐首次使用，会一步步问你要填什么）',
+      '  set   设置单项：sgen config set <路径> <值>，可设置：',
+      renderSettable(),
+      '  list  查看当前配置（Key 打码显示）',
+      '  test  逐把 Key 连通性检查（✓ 连通 / ✗ 鉴权失败）',
+    ].join('\n'),
   )
 }

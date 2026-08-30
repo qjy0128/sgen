@@ -21,6 +21,31 @@ function writeConfig(home, providers) {
   fs.writeFileSync(path.join(home, '.sgen', 'config.json'), JSON.stringify({ providers }))
 }
 
+test('sgen config 不带子命令：列出全部可设项、含义与可复制示例', async () => {
+  const r = await run(['config'])
+  assert.equal(r.code, 2)
+  assert.match(r.stderr, /agnes\.region/)
+  assert.match(r.stderr, /international=国际版/)
+  assert.match(r.stderr, /china=中国版/)
+  assert.match(r.stderr, /sgen config set agnes\.region china/)
+  assert.match(r.stderr, /sgen config set sensenova\.api_keys sk-aaa,sk-bbb/)
+  assert.match(r.stderr, /功能完全一致/)
+})
+
+test('sgen config set 缺参数：报错中同样给出可设项与示例', async () => {
+  const r = await run(['config', 'set'])
+  assert.equal(r.code, 2)
+  assert.match(r.stderr, /agnes\.region/)
+  assert.match(r.stderr, /sgen config set agnes\.region china/)
+})
+
+test('sgen --help：包含 config set 示例与"可选值见 sgen models"指引', async () => {
+  const r = await run(['--help'])
+  assert.equal(r.code, 0)
+  assert.match(r.stdout, /sgen config set agnes\.region china/)
+  assert.match(r.stdout, /sgen models/)
+})
+
 test('config init：答 Y（在中国境内）→ china，并给出区域说明（Key 目前通用）', async () => {
   const home = tmpDir('sgen-home-')
   try {
