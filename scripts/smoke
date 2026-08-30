@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# 真机冒烟验收：商汤生图 / Agnes 生图 / Agnes 生视频 各跑一次（需已配置 Key）
+# 用法：scripts/smoke [输出目录]
+set -euo pipefail
+
+OUT_DIR="${1:-./sgen-smoke-$(date +%Y%m%d-%H%M%S)}"
+mkdir -p "$OUT_DIR"
+
+echo "== [1/3] 商汤 U1.5 Lite 文生图（2K） =="
+sgen image "一只戴宇航头盔的橘猫，深空背景，极简海报风格" --size 2K --out "$OUT_DIR/01-sensenova.png"
+
+echo "== [2/3] Agnes Image 2.1 Flash 文生图（1K） =="
+sgen image "星际旅行主题海报，与上一张同风格" --model agnes-image-2.1-flash --size 1K --out "$OUT_DIR/02-agnes.png"
+
+echo "== [3/3] Agnes Video 2.5 Flash 文生视频（5 秒，等待 1–3 分钟属正常） =="
+sgen video "海浪拍打沙滩，航拍视角，日落" --seconds 5 --out "$OUT_DIR/03-agnes.mp4"
+
+echo ""
+echo "✅ 冒烟全部通过，文件在：$OUT_DIR"
+ls -lh "$OUT_DIR"

@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# 安装/更新 sgen 技能到本机各 AI 编程工具
+# 正本只有一份：~/.agents/skills/sgen/（Codex/dsh/Kimi Code/opencode/Trae/ZCode 直接读这里）
+# 其余工具（Claude Code、Qoder、Trae 全局、Antigravity）按各自约定软链过去
+set -euo pipefail
+
+SRC="$(cd "$(dirname "$0")/.." && pwd)/skill/sgen/SKILL.md"
+[[ -f "$SRC" ]] || { echo "找不到技能源文件：$SRC"; exit 1; }
+
+mkdir -p ~/.agents/skills/sgen
+cp "$SRC" ~/.agents/skills/sgen/SKILL.md
+echo "✓ 正本 ~/.agents/skills/sgen/SKILL.md（Codex/dsh/Kimi Code/opencode/ZCode 自动读取）"
+
+link() {
+  mkdir -p "$(dirname "$1")"
+  ln -sfn "$2" "$1"
+  echo "✓ $1"
+}
+link ~/.zcode/skills/sgen ../../.agents/skills/sgen
+link ~/.claude/skills/sgen ../../.agents/skills/sgen
+# Qoder 国际版与 QoderCN（通义灵码 CLI）是两个独立数据目录（官方文档区分）
+link ~/.qoder/skills/sgen ../../.agents/skills/sgen
+link ~/.qoder-cn/skills/sgen ../../.agents/skills/sgen
+# Trae 国际版与国内版同样分目录（~/.trae / ~/.trae-cn）
+link ~/.trae/skills/sgen ../../.agents/skills/sgen
+link ~/.trae-cn/skills/sgen ../../.agents/skills/sgen
+link ~/.gemini/config/skills/sgen ../../../.agents/skills/sgen
+
+echo "完成。Codex/dsh/Kimi Code/opencode 经 ~/.agents/skills 自动读取；"
+echo "mcode 与 WorkBuddy 无文件约定，接入方式见 docs/agent-integration.md。"

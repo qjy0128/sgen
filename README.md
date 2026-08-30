@@ -1,0 +1,198 @@
+# sgen —— 面向 Agent 的免费生图/生视频命令行工具
+
+一条命令调用商汤日日新（SenseNova）与 Agnes 的生图、生视频模型。给任何 AI 编程工具（ZCode、Claude Code、Cursor……）当"手"用：默认只走免费模型、结果自动下载到本地、参数在本机先校验（非法参数一个请求都不发）。
+
+- **默认生图**：商汤 `sensenova-u1.5-lite`（支持 4K、无水印、公测免费）
+- **默认生视频**：Agnes `agnes-video-2.5-flash`（720P、4–12 秒、限免 $0）
+- 多把 API Key 自动轮换分摊额度，限流自动换下一把
+- 视频异步任务自动轮询等待，`--no-wait` + `sgen status` 随时中断/恢复
+
+## 安装
+
+前置要求：[Node.js](https://nodejs.org) ≥ 22（`node --version` 查看；本工具零运行时依赖）。
+
+```bash
+git clone https://github.com/qjy0128/sgen.git
+cd sgen
+npm link          # 全局安装 sgen 命令
+sgen --help       # 打印用法说明即安装成功
+```
+
+## 获取 API Key（两家平台，约 5 分钟）
+
+### 1. 商汤日日新 SenseNova（免费）
+
+1. 打开 [platform.sensenova.cn](https://platform.sensenova.cn) 注册并登录
+2. 进入控制台 → **管理中心 → API-Key 管理** → 创建 API Key
+3. Key 以 `sk-` 开头，**只在创建时完整显示一次**，请立即复制保存
+4. 免费额度：Token Plan 公测期**每模型 1500 次请求 / 5 小时**（说明见 [sensenova.cn/token-plan](https://www.sensenova.cn/token-plan)）
+
+### 2. Agnes（图片/视频模型限免 $0）
+
+1. 国际版控制台：[platform.agnes-ai.com](https://platform.agnes-ai.com)（默认）；中国版：[platform.agnes-ai.cn](https://platform.agnes-ai.cn)
+2. 注册并登录后，在**开发者控制台**生成 API Key
+3. ⚠ 国际版与中国版的**账号和 Key 不通用**——用哪个区域就在那个区域注册，并在工具里保持一致的区域设置（见下方配置）
+
+## 配置密钥
+
+```bash
+sgen config init          # 引导式创建配置（也支持管道：echo "sk-xxx" | sgen config init）
+sgen config list          # 查看配置（Key 打码显示）
+sgen config test          # 逐把 Key 连通性检查
+sgen config set agnes.region china   # Agnes 切换中国版（域名自动换 api.agnes-ai.cn）
+```
+
+配置文件 `~/.sgen/config.json`（**明文存 Key，只在你本机、不在仓库内，不会被 git 提交**）：
+
+```json
+{
+  "providers": {
+    "sensenova": { "api_keys": ["sk-第一把", "sk-第二把"] },
+    "agnes": { "api_keys": ["ak-xxx"], "region": "international" }
+  }
+}
+```
+
+- 每家可配多把 Key，按序轮转使用（游标存 `~/.sgen/state.json`），撞 401/429 自动换下一把
+- 环境变量兜底：`SENSENOVA_API_KEY` / `AGNES_API_KEY`
+- `base_url` 可直接覆写（默认商汤 `https://token.sensenova.cn/v1`；Agnes 国际版 `https://apihub.agnes-ai.com/v1`、中国版 `https://api.agnes-ai.cn/v1`）
+- ⚠ Agnes 国际版与中国版 Key **不通用**，切换区域时请确认 Key 归属
+
+配置完成后验证：
+
+```bash
+sgen config test            # 逐把 Key 连通性检查（✓ 连通 / ✗ 鉴权失败）
+sgen image "一张测试图"       # 真实生成一张（默认免费模型）
+```
+
+## 命令
+
+### 生图 `sgen image <提示词>`
+
+```bash
+sgen image "一只戴宇航头盔的橘猫"                       # 默认商汤 u1.5-lite，落当前目录
+sgen image "海报设计" --size 4K --out poster.png        # 指定尺寸与输出文件
+sgen image "改成赛博朋克风" --image ./photo.png         # 图生图（商汤 edits 接口）
+sgen image "合成一张" --image a.png --image b.png \
+  --model agnes-image-2.1-flash --size 2K --ratio 16:9 # Agnes 多图合成
+```
+
+| 参数 | 说明 |
+|---|---|
+| `--model <名称>` | 模型（默认 `sensenova-u1.5-lite`；可填目录外新模型名，跳过本地校验透传） |
+| `--size <尺寸>` | 档位（`2K`/`4K`、`1K`–`4K`）或精确像素 `1024x1024`，按模型限制校验 |
+| `--ratio <比例>` | 宽高比，仅目录中标注支持的模型可用 |
+| `--image <路径>` | 参考图，可重复多张（png/jpg/webp/gif，自动转 Base64，无需图床） |
+| `--out <路径>` | 输出文件或目录（默认当前目录，命名 `sgen-时间戳-序号.png`） |
+| `--json` | 结构化输出 `{ok, model, file, elapsed_ms}` |
+
+### 生视频 `sgen video <提示词>`
+
+```bash
+sgen video "日落海滩航拍" --seconds 8                   # 默认 agnes-video-2.5-flash，自动等出片
+sgen video "让画面动起来" --first-frame a.png --last-frame b.png   # 首尾帧
+sgen video "按 <Picture 1> 的风格" --ref-image a.png --ref-audio s.mp3  # 参考图+音频
+sgen video "慢镜头" --model agnes-video-v2.0 --num-frames 241 --frame-rate 24  # 帧级控制，约 10 秒
+sgen video "长任务" --no-wait                           # 立即返回 video_id
+```
+
+模式自动推导：传 `--first-frame`/`--last-frame` → keyframe；传参考素材 → reference；都不传 → text。首尾帧与参考素材互斥。
+
+| 参数 | 说明 |
+|---|---|
+| `--seconds <秒>` | 时长 4–12（默认 5），仅 2.5 系列 |
+| `--size <档位>` | 2.5-flash 仅 `720P`；2.5 支持 `720P/960P/2K`；v2.0 支持 `480p/720p/1080p` |
+| `--ratio <比例>` | 2.5 系列 6 档（21:9/16:9/4:3/1:1/3:4/9:16）；v2.0 5 档 |
+| `--first-frame` / `--last-frame <路径>` | 首帧/尾帧图（可只用首帧） |
+| `--ref-image <路径>` | 参考图，≤5 张，可重复 |
+| `--ref-audio <路径>` | 参考音频（mp3/wav/m4a/aac/ogg/flac） |
+| `--ref-video <路径>` | 参考视频（仅收费模型 `agnes-video-2.5`），`--video-start <秒>` 起始位置 |
+| `--num-frames <数>` | v2.0 帧数，须 8n+1 且 ≤441（时长 = 帧数 ÷ 帧率） |
+| `--frame-rate <数>` | v2.0 帧率 1–60 |
+| `--no-wait` | 提交后立即返回 video_id |
+| `--timeout <秒>` | 等待上限（默认 600） |
+
+### 任务查询 `sgen status <video_id>`
+
+```bash
+sgen status vid-123            # 单次查询（进行中会显示进度百分比）
+sgen status vid-123 --wait     # 继续等待到出片并自动下载
+```
+
+### 其他
+
+```bash
+sgen models                    # 打印全部内置模型能力矩阵
+sgen config init|set|list|test # 配置管理
+```
+
+**退出码**：`0` 成功 / `2` 本地用法或参数错误 / `1` 远端 API 或网络错误。
+
+## 模型能力矩阵（附录）
+
+### 图片模型（4 个，当前全部免费）
+
+| 模型 | 供应商 | 能力 | 尺寸 | 比例 | 计费 |
+|---|---|---|---|---|---|
+| `sensenova-u1.5-lite` ⭐默认 | 商汤 | 文生图 + 图生图 | `2K`/`4K`/`auto` 或 `WxH`（宽高 512–4096 且为 32 的倍数，比例 ≤3:1） | 无比例参数，用 `--size` | 公测免费（1500 次/5 小时/模型） |
+| `sensenova-u1-fast` | 商汤 | 仅文生图 | 仅 `1K`/`2K` 两档（**4K 会被拒**），比例上限 16:9、最高 9:21 | 10 档（见下表） | 公测免费（同上） |
+| `agnes-image-2.1-flash` | Agnes | 文生图 + 图生图（前 3 张参考图免费） | `1K`/`2K`/`3K`/`4K`（兼容精确像素，非原生值会被归一化） | 8 档：1:1/3:4/4:3/16:9/9:16/2:3/3:2/21:9 | 限免 $0（刊例 1K $0.010 – 4K $0.024/张） |
+| `agnes-image-2.0-flash` | Agnes | 文生图 + 图生图 | 精确像素写法（如 `1024x768`） | 无比例参数 | 限免 $0（刊例同上） |
+
+`sensenova-u1-fast` 档位→精确像素对照（工具已内置自动换算）：
+
+| 比例 | 1K | 2K |
+|---|---|---|
+| 1:1 | 1344x1344 | 2048x2048 |
+| 16:9 | 1792x992 | 2752x1536 |
+| 9:16 | 992x1792 | 1536x2752 |
+| 2:3 | 1088x1632 | 1664x2496 |
+| 3:2 | 1632x1088 | 2496x1664 |
+| 3:4 | 1152x1536 | 1760x2368 |
+| 4:3 | 1536x1152 | 2368x1760 |
+| 4:5 | 1184x1472 | 1824x2272 |
+| 5:4 | 1472x1184 | 2272x1824 |
+| 9:21 | 864x2048 | 1344x3136 |
+
+### 视频模型（3 个，全部 Agnes；商汤无开放视频 API）
+
+| 模型 | 能力 | 分辨率 | 比例 | 时长 | 计费 |
+|---|---|---|---|---|---|
+| `agnes-video-2.5-flash` ⭐默认 | 文生视频 / 首帧 / 首尾帧 / 参考图≤5 / 参考音频 | **仅 720P** | 6 档：21:9→1680x720、16:9→1280x720、4:3→960x720、1:1→720x720、3:4→720x960、9:16→720x1280 | 4–12 秒（默认 5） | 限免 $0/秒（刊例 $0.025/秒） |
+| `agnes-video-v2.0` | 文生视频 / 首帧 / 首尾帧 | 480p/720p/1080p（宽高由档位+比例推导，服务端归一化） | 5 档：16:9/9:16/1:1/4:3/3:4 | 帧数÷帧率：`num_frames` ≤441 且 8n+1，`frame_rate` 1–60（约 18 秒封顶） | 限免 $0/秒（刊例 $0.005/秒） |
+| `agnes-video-2.5` ⚠️收费 | 文生视频 / 首尾帧 / 参考图 / 参考音频 / **参考视频** | 720P / 960P / 2K | 同 2.5-flash | 4–12 秒 | **按刊例收费**：720P $0.025、960P $0.040、2K $0.055 每秒；计费时长 = 输出秒数 + 输入视频秒数；第 6 张起参考图 $0.005/张 |
+
+**计费安全**：默认模型固定为免费目录成员；`agnes-video-2.5` 必须显式 `--model` 点名，执行前会打印预估费用。其他模型一旦限免结束，费用提示会按目录中的计费标记自动生效。
+
+## 在各个 AI 编程工具中使用（ZCode / Claude Code / Codex / Qoder / Trae / opencode / Antigravity / dsh / Kimi Code / mcode / WorkBuddy）
+
+本机已完成全部接入（技能正本在 `~/.agents/skills/sgen/`，各工具按约定软链/写规则）。逐工具说明、mcode/WorkBuddy 的手动接入法、沙箱网络放行清单见 **[docs/agent-integration.md](docs/agent-integration.md)**。技能源文件改动后运行 `scripts/install-skill` 一键同步。
+
+## 重要说明
+
+- **免费政策有时效**（"公测/限免"为 2026-08 调研口径），以两家控制台为准；商汤另有"60000 积分/5 小时"表述并存，限流一律按 429 处理并自动换 Key。
+- 商汤生图接口实际只接受 `auto` 或 `WxH` 精确像素——传 `2K`/`4K` 档位时工具会自动按比例换算成精确像素再发送（真机验证结论，与部分公告文档不符）。
+- Agnes 视频状态查询接口有独立限流，查询过快返回 429——工具自动指数退避重试（3s→6s→…封顶 15s），无需处理。
+- 商汤返回的图片 URL **24 小时失效**——工具已自动下载到本地，请以本地文件为准。
+- Agnes 视频输出是否自带音频官方未明示，不承诺音频。
+- 参考素材统一走本地文件 Base64 编码，无需图床；要求公开 URL 的场景不适用本工具用法。
+
+## 开发与测试
+
+```bash
+npm test          # 黑盒测试：子进程跑 CLI + 本地假服务器（两家 API 全模拟）
+scripts/smoke     # 真机冒烟：商汤生图 / Agnes 生图 / Agnes 生视频 各一次（需已配置 Key）
+```
+
+测试全部打在 CLI 进程边界上（`node --test`，零依赖），不访问真实网络。
+
+## 排错
+
+| 症状 | 处理 |
+|---|---|
+| `未找到 … API Key` | `sgen config init` 或设置对应环境变量 |
+| `HTTP 401/403` | Key 无效或区域不匹配（Agnes 两版 Key 不通用）；`sgen config test` 逐把检查 |
+| `全部 N 把 Key 均失败` | 限流/额度用尽：再加几把 Key，或稍后再试 |
+| `--size/--ratio/--seconds 不被支持` | 错误信息会列出该模型可选值；`sgen models` 查全量 |
+| 视频等待超时 | 报错里有 `sgen status <id> --wait` 恢复命令 |
+| 下载的 URL 失效 | 商汤 URL 24 小时过期；本地文件已自动保存 |

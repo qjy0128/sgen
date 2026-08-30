@@ -1,0 +1,16 @@
+{
+  "name": "sgen",
+  "version": "0.1.0",
+  "description": "面向 Agent 的免费生图/生视频命令行工具（商汤 SenseNova + Agnes）",
+  "type": "module",
+  "bin": {
+    "sgen": "bin/sgen.js"
+  },
+  "scripts": {
+    "test": "node --test 'test/*.test.js'"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
