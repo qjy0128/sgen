@@ -4,7 +4,8 @@ import { PROVIDERS } from './catalog.js'
 import { maskKey } from './keys.js'
 import { usageErr } from './errors.js'
 
-const CHINA_REMINDER = '提示：Agnes 中国版（api.agnes-ai.cn）与国际版 Key 不通用，请确认 Key 归属。'
+const CHINA_REMINDER =
+  '提示：Agnes 中国版接口为 api.agnes-ai.cn（国际版为 apihub.agnes-ai.com）；两版 Key 目前通用，官方未承诺长期保持。'
 
 function splitKeys(input) {
   return input

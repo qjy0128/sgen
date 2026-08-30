@@ -7,7 +7,7 @@ export const DEFAULT_BASE_URLS = {
   agnes: 'https://apihub.agnes-ai.com/v1',
 }
 
-// Agnes 双区：国际版与中国版域名不同，且两版 Key 不通用
+// Agnes 双区：国际版与中国版接口域名不同（Key 目前通用，官方未承诺长期保持）
 export const AGNES_REGIONS = {
   international: 'https://apihub.agnes-ai.com/v1',
   china: 'https://api.agnes-ai.cn/v1',

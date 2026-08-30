@@ -58,7 +58,7 @@ export async function callWithKeyPool({ providerId, label, keys, fn }) {
   const lines = [
     `${label}全部 ${keys.length} 把 Key 均失败：`,
     ...failures,
-    '请运行 sgen config init 检查配置；Agnes 国际版与中国版 Key 不通用，请确认 Key 归属平台。',
+    '请运行 sgen config init 检查配置；Agnes 两版接口域名不同（Key 目前通用），持续失败可检查区域设置。',
   ]
   throw Object.assign(new Error(lines.join('\n')), { kind: 'api' })
 }

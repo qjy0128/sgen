@@ -31,7 +31,7 @@ sgen --help       # 打印用法说明即安装成功
 
 1. 国际版控制台：[platform.agnes-ai.com](https://platform.agnes-ai.com)（默认）；中国版：[platform.agnes-ai.cn](https://platform.agnes-ai.cn)
 2. 注册并登录后，在**开发者控制台**生成 API Key
-3. ⚠ 国际版与中国版的**账号和 Key 不通用**——用哪个区域就在那个区域注册，并在工具里保持一致的区域设置（见下方配置）
+3. 两版接口域名不同，但 **Key 目前通用**（官方未承诺长期保持）。工具默认走国际版域名，需要国内节点时用 `sgen config set agnes.region china` 一键切换
 
 ## 配置密钥
 
@@ -56,7 +56,7 @@ sgen config set agnes.region china   # Agnes 切换中国版（域名自动换 a
 - 每家可配多把 Key，按序轮转使用（游标存 `~/.sgen/state.json`），撞 401/429 自动换下一把
 - 环境变量兜底：`SENSENOVA_API_KEY` / `AGNES_API_KEY`
 - `base_url` 可直接覆写（默认商汤 `https://token.sensenova.cn/v1`；Agnes 国际版 `https://apihub.agnes-ai.com/v1`、中国版 `https://api.agnes-ai.cn/v1`）
-- ⚠ Agnes 国际版与中国版 Key **不通用**，切换区域时请确认 Key 归属
+- Agnes 国际版与中国版接口域名不同；**Key 目前通用**（官方未承诺长期保持），切换区域只影响请求走哪个域名
 
 配置完成后验证：
 
@@ -191,7 +191,7 @@ scripts/smoke     # 真机冒烟：商汤生图 / Agnes 生图 / Agnes 生视频
 | 症状 | 处理 |
 |---|---|
 | `未找到 … API Key` | `sgen config init` 或设置对应环境变量 |
-| `HTTP 401/403` | Key 无效或区域不匹配（Agnes 两版 Key 不通用）；`sgen config test` 逐把检查 |
+| `HTTP 401/403` | Key 无效（Agnes 两版 Key 目前通用；持续失败可切换 `agnes.region` 换域名重试）；`sgen config test` 逐把检查 |
 | `全部 N 把 Key 均失败` | 限流/额度用尽：再加几把 Key，或稍后再试 |
 | `--size/--ratio/--seconds 不被支持` | 错误信息会列出该模型可选值；`sgen models` 查全量 |
 | 视频等待超时 | 报错里有 `sgen status <id> --wait` 恢复命令 |

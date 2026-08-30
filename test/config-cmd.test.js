@@ -21,7 +21,7 @@ function writeConfig(home, providers) {
   fs.writeFileSync(path.join(home, '.sgen', 'config.json'), JSON.stringify({ providers }))
 }
 
-test('config init：管道输入写入多 Key 与区域；china 给出 Key 不通用提醒', async () => {
+test('config init：管道输入写入多 Key 与区域；china 给出区域说明（Key 目前通用）', async () => {
   const home = tmpDir('sgen-home-')
   try {
     const r = await run(['config', 'init'], {
@@ -33,7 +33,7 @@ test('config init：管道输入写入多 Key 与区域；china 给出 Key 不�
     assert.deepEqual(cfg.providers.sensenova.api_keys, ['sk-aaa', 'sk-bbb'])
     assert.deepEqual(cfg.providers.agnes.api_keys, ['ak-xxx'])
     assert.equal(cfg.providers.agnes.region, 'china')
-    assert.match(r.stderr, /不通用/)
+    assert.match(r.stderr, /目前通用/)
     assert.ok(r.stdout.includes('已写入'))
   } finally {
     home.cleanup()
@@ -84,7 +84,7 @@ test('config set：region 切换（含提醒）、api_keys 逗号转数组、非
     const r1 = await run(['config', 'set', 'agnes.region', 'china'], { env: { HOME: home.dir } })
     assert.equal(r1.code, 0)
     assert.equal(readConfig(home.dir).providers.agnes.region, 'china')
-    assert.match(r1.stderr, /不通用/)
+    assert.match(r1.stderr, /目前通用/)
 
     const r2 = await run(['config', 'set', 'sensenova.api_keys', 'sk-1, sk-2'], { env: { HOME: home.dir } })
     assert.equal(r2.code, 0)
@@ -117,7 +117,7 @@ test('config test：逐把 Key 连通性报告（好 Key 连通、坏 Key 鉴权
   }
 })
 
-test('region=china 时使用 Agnes：stderr 提醒 Key 不通用，生图正常', async (t) => {
+test('region=china 时使用 Agnes：stderr 提示两版 Key 目前通用，生图正常', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -131,7 +131,7 @@ test('region=china 时使用 Agnes：stderr 提醒 Key 不通用，生图正常'
       cwd: cwd.dir,
     })
     assert.equal(r.code, 0)
-    assert.match(r.stderr, /不通用/)
+    assert.match(r.stderr, /目前通用/)
     assert.equal(fs.readdirSync(cwd.dir).length, 1)
   } finally {
     home.cleanup()

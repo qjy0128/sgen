@@ -45,7 +45,7 @@ sgen status <video_id> --wait                                # 回来续等并�
 ## 常见报错自救
 
 - `未找到 API Key` → 让用户跑 `sgen config init`（支持多把 Key 自动轮换）
-- `HTTP 401/403` → Key 无效或 Agnes 国际版/中国版用混了（两版 Key 不通用）；`sgen config test` 逐把查
+- `HTTP 401/403` → Key 无效；Agnes 国际版/中国版 Key 目前通用，若持续失败可 `sgen config set agnes.region international|china` 换域名重试；`sgen config test` 逐把查
 - `全部 N 把 Key 均失败` → 免费额度撞限流，等窗口刷新或加 Key
 - `--xxx 不被支持` → 按报错里的可选值改参数，`sgen models` 查全量
 - 视频等待超时 → 用报错里的 `sgen status <id> --wait` 恢复，不要重新提交浪费额度

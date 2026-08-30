@@ -75,7 +75,9 @@ async function resolveAgnes(providerId) {
     throw usageErr('未找到 Agnes API Key。请运行 sgen config init 配置，或设置环境变量 AGNES_API_KEY。')
   }
   if (cfg.region === 'china') {
-    console.error('提示：Agnes 中国版（api.agnes-ai.cn）与国际版 Key 不通用，请确认 Key 归属。')
+    console.error(
+      '提示：Agnes 中国版接口为 api.agnes-ai.cn（国际版为 apihub.agnes-ai.com）；两版 Key 目前通用，官方未承诺长期保持。',
+    )
   }
   return cfg
 }
