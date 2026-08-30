@@ -53,12 +53,13 @@ async function askAll(questions) {
 }
 
 async function configInit() {
-  const [snInput, agnesInput, regionInput] = await askAll([
+  const [snInput, agnesInput, inChinaInput] = await askAll([
     '商汤 API Key（多把用英文逗号分隔，回车跳过）：',
     'Agnes API Key（多把用英文逗号分隔，回车跳过）：',
-    'Agnes 区域 international/china（回车默认 international）：',
+    '是否在中国境内？（只跟接入的 API 域名相关，功能完全一致）[Y/N，回车默认 N]：',
   ])
-  const region = regionInput === 'china' ? 'china' : 'international'
+  // Y/yes/是 → 中国版域名；其余（含回车、N、无效输入）→ 国际版
+  const region = ['y', 'yes', '是'].includes(inChinaInput.toLowerCase()) ? 'china' : 'international'
 
   const raw = readRawConfig()
   const providers = raw.providers ?? {}

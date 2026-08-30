@@ -21,12 +21,12 @@ function writeConfig(home, providers) {
   fs.writeFileSync(path.join(home, '.sgen', 'config.json'), JSON.stringify({ providers }))
 }
 
-test('config init：管道输入写入多 Key 与区域；china 给出区域说明（Key 目前通用）', async () => {
+test('config init：答 Y（在中国境内）→ china，并给出区域说明（Key 目前通用）', async () => {
   const home = tmpDir('sgen-home-')
   try {
     const r = await run(['config', 'init'], {
       env: { HOME: home.dir },
-      stdin: 'sk-aaa,sk-bbb\nak-xxx\nchina\n',
+      stdin: 'sk-aaa,sk-bbb\nak-xxx\nY\n',
     })
     assert.equal(r.code, 0)
     const cfg = readConfig(home.dir)
@@ -35,6 +35,22 @@ test('config init：管道输入写入多 Key 与区域；china 给出区域说�
     assert.equal(cfg.providers.agnes.region, 'china')
     assert.match(r.stderr, /目前通用/)
     assert.ok(r.stdout.includes('已写入'))
+    assert.match(r.stdout, /是否在中国境内/)
+  } finally {
+    home.cleanup()
+  }
+})
+
+test('config init：答 n 或空 → international（默认）', async () => {
+  const home = tmpDir('sgen-home-')
+  try {
+    const a = await run(['config', 'init'], { env: { HOME: home.dir }, stdin: 'sk-1\nak-1\nn\n' })
+    assert.equal(a.code, 0)
+    assert.equal(readConfig(home.dir).providers.agnes.region, 'international')
+
+    const b = await run(['config', 'init'], { env: { HOME: home.dir }, stdin: 'sk-1\nak-1\n随便打的\n' })
+    assert.equal(b.code, 0)
+    assert.equal(readConfig(home.dir).providers.agnes.region, 'international')
   } finally {
     home.cleanup()
   }
