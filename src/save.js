@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { httpTimeoutMs, networkErrText } from './api.js'
 
 function timestamp() {
   const d = new Date()
@@ -29,9 +30,9 @@ export function resolveOutPath(out, ext) {
 export async function downloadTo(url, outPath) {
   let res
   try {
-    res = await fetch(url)
+    res = await fetch(url, { signal: AbortSignal.timeout(httpTimeoutMs()) })
   } catch (err) {
-    throw Object.assign(new Error(`下载失败（${url}）：${err.message}`), { kind: 'network' })
+    throw Object.assign(new Error(`下载失败（${url}）：${networkErrText(err)}`), { kind: 'network' })
   }
   if (!res.ok) throw Object.assign(new Error(`下载失败（HTTP ${res.status}）`), { kind: 'network' })
 

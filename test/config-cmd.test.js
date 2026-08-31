@@ -158,7 +158,7 @@ test('config test：逐把 Key 连通性报告（好 Key 连通、坏 Key 鉴权
   }
 })
 
-test('region=china 时使用 Agnes：stderr 提示两版 Key 目前通用，生图正常', async (t) => {
+test('region=china 时使用 Agnes：生图正常，且不再每次刷域名提示（只在 config 命令里提示）', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -172,7 +172,7 @@ test('region=china 时使用 Agnes：stderr 提示两版 Key 目前通用，生�
       cwd: cwd.dir,
     })
     assert.equal(r.code, 0)
-    assert.match(r.stderr, /目前通用/)
+    assert.ok(!r.stderr.includes('目前通用'), `stderr 不应再刷域名提示：${r.stderr}`)
     assert.equal(fs.readdirSync(cwd.dir).length, 1)
   } finally {
     home.cleanup()

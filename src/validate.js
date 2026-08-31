@@ -54,7 +54,9 @@ export function validateImageParams(model, { size, ratio } = {}) {
 
   // 非档位、非 WxH 的未知取值（如新档位常量）：该模型支持自由写法时透传，否则拦截
   if (rules.kTiers) {
-    const opts = [...Object.keys(rules.kTiers), ...rules.tiers, '或 WxH（宽高 512–4096、32 的倍数、比例≤3:1）']
+    const w = rules.wxh
+    const wxhDesc = `或 WxH（宽高 ${w.min}–${w.max}、${w.multipleOf} 的倍数、比例≤${w.maxRatio}:1）`
+    const opts = [...Object.keys(rules.kTiers), ...rules.tiers, wxhDesc]
     throw usageErr(`--size ${size} 不被 ${model.id} 支持。可选：${opts.join('、')}`)
   }
   if (rules.tiers && !rules.wxh) {

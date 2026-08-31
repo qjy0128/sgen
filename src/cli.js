@@ -1,4 +1,4 @@
-import { loadConfig } from './config.js'
+import { resolveProviderConfig } from './config.js'
 import { generateImage as sensenovaGenerate } from './sensenova.js'
 import { generateImage as agnesGenerate } from './agnes.js'
 import { resolveOutPath, downloadTo } from './save.js'
@@ -30,6 +30,7 @@ image 选项：
   --json             以 JSON 输出结果
 
 video 选项：
+  --model <名称>     指定模型（sgen models 查看可选值）
   --seconds <秒>     时长 4–12 秒（默认 5；仅 2.5 系列）
   --size <档位>      分辨率（2.5-flash 仅 720P；v2.0 支持 480p/720p/1080p）
   --ratio <比例>     2.5 系列 6 档；v2.0 支持 5 档
@@ -38,10 +39,20 @@ video 选项：
   --ref-image <路径> 参考图（≤5 张，可重复）
   --ref-audio <路径> 参考音频（可重复）
   --ref-video <路径> 参考视频（仅收费模型 agnes-video-2.5）
+  --video-start <秒> 参考视频的起始秒（配 --ref-video，默认 0）
   --num-frames <数>  v2.0 帧数（8n+1，≤441）
   --frame-rate <数>  v2.0 帧率（1–60）
   --no-wait          提交后立即返回 video_id，稍后用 sgen status 取片
   --timeout <秒>     等待上限（默认 600）
+  --out <路径>       输出文件或目录（默认当前目录自动命名）
+  --json             以 JSON 输出结果
+
+status 选项：
+  --model <名称>     任务所用模型（2.5 系列查询需带，默认 agnes-video-2.5-flash）
+  --wait             任务未完成时继续等待直至出片
+  --timeout <秒>     等待上限（默认 600）
+  --out <路径>       输出文件或目录（默认当前目录自动命名）
+  --json             以 JSON 输出结果
 
 提示：--model / --size / --ratio 的可选值各模型不同，运行 sgen models 查看；
      填错会在本地直接报错并列出该模型支持的全部取值（不浪费 API 调用）。`
@@ -69,21 +80,12 @@ async function imageCmd(argv) {
 
   const providerId = rec ? rec.provider : providerForModelId(modelId)
 
-  const images = args.values.image?.map(imageToDataUri)
-  if (rec && images && !rec.caps.includes('图生图')) {
+  if (rec && args.values.image && !rec.caps.includes('图生图')) {
     throw usageErr(`${modelId} 不支持图生图（--image）。sgen models 可查看各模型能力`)
   }
+  const images = args.values.image?.map(imageToDataUri)
 
-  const cfg = loadConfig()[providerId]
-  const envName = providerId === 'sensenova' ? 'SENSENOVA_API_KEY' : 'AGNES_API_KEY'
-  if (!cfg.api_keys.length) {
-    throw usageErr(`未找到${PROVIDERS[providerId].label} API Key。请运行 sgen config init 配置，或设置环境变量 ${envName}。`)
-  }
-  if (providerId === 'agnes' && cfg.region === 'china') {
-    console.error(
-      '提示：Agnes 中国版接口为 api.agnes-ai.cn（国际版为 apihub.agnes-ai.com）；两版 Key 目前通用，官方未承诺长期保持。',
-    )
-  }
+  const cfg = resolveProviderConfig(providerId)
 
   const startedAt = Date.now()
   const model = modelId

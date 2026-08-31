@@ -1,11 +1,9 @@
 import readline from 'node:readline'
-import { configPath, readRawConfig, saveRawConfig, loadConfig } from './config.js'
+import { configPath, readRawConfig, saveRawConfig, loadConfig, AGNES_CHINA_HINT } from './config.js'
 import { PROVIDERS } from './catalog.js'
 import { maskKey } from './keys.js'
 import { usageErr } from './errors.js'
-
-const CHINA_REMINDER =
-  '提示：Agnes 中国版接口为 api.agnes-ai.cn（国际版为 apihub.agnes-ai.com）；两版 Key 目前通用，官方未承诺长期保持。'
+import { httpTimeoutMs } from './api.js'
 
 function splitKeys(input) {
   return input
@@ -68,7 +66,7 @@ async function configInit() {
   saveRawConfig({ ...raw, providers })
 
   console.log(`已写入 ${configPath()}`)
-  if (region === 'china') console.error(CHINA_REMINDER)
+  if (region === 'china') console.error(AGNES_CHINA_HINT)
   return 0
 }
 
@@ -129,7 +127,7 @@ async function configSet(keyPath, value) {
   saveRawConfig({ ...raw, providers })
 
   console.log(`已设置 ${keyPath}`)
-  if (keyPath === 'agnes.region' && parsed === 'china') console.error(CHINA_REMINDER)
+  if (keyPath === 'agnes.region' && parsed === 'china') console.error(AGNES_CHINA_HINT)
   return 0
 }
 
@@ -166,6 +164,7 @@ async function configTest() {
       try {
         const res = await fetch(`${c.base_url}/models`, {
           headers: { authorization: `Bearer ${key}` },
+          signal: AbortSignal.timeout(httpTimeoutMs()),
         })
         status = res.status
       } catch (err) {

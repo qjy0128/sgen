@@ -6,6 +6,23 @@
   "bin": {
     "sgen": "bin/sgen.js"
   },
+  "files": [
+    "bin",
+    "src",
+    "skill"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/qjy0128/sgen.git"
+  },
+  "keywords": [
+    "image-generation",
+    "video-generation",
+    "cli",
+    "agent",
+    "sensenova",
+    "agnes"
+  ],
   "scripts": {
     "test": "node --test 'test/*.test.js'"
   },

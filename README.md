@@ -53,8 +53,9 @@ sgen config set agnes.region china   # Agnes 切换中国版（域名自动换 a
 }
 ```
 
-- 每家可配多把 Key，按序轮转使用（游标存 `~/.sgen/state.json`），撞 401/429 自动换下一把
+- 每家可配多把 Key，按序轮转使用（游标存 `~/.sgen/state.json`），撞 401/429 自动换下一把，且后续调用优先从好 Key 起步
 - 环境变量兜底：`SENSENOVA_API_KEY` / `AGNES_API_KEY`
+- 网络抖动自动重试一次；单次 HTTP 调用超时默认 300 秒，可用 `SGEN_HTTP_TIMEOUT_MS` 覆写
 - `base_url` 可直接覆写（默认商汤 `https://token.sensenova.cn/v1`；Agnes 国际版 `https://apihub.agnes-ai.com/v1`、中国版 `https://api.agnes-ai.cn/v1`）
 - Agnes 国际版与中国版接口域名不同；**Key 目前通用**（官方未承诺长期保持），切换区域只影响请求走哪个域名
 

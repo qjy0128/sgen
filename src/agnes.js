@@ -1,4 +1,4 @@
-import { postJson } from './api.js'
+import { postJson, httpTimeoutMs, networkErrText } from './api.js'
 
 // Agnes 生图：size 用档位常量，ratio 为原生参数；
 // 依官方文档 response_format 必须嵌在 extra_body 中（顶层会 400），参考图走 extra_body.image 数组
@@ -36,9 +36,10 @@ export async function queryVideoTask({ baseUrl, apiKey, videoId, model }) {
   try {
     res = await fetch(`${origin}/agnesapi?${params}`, {
       headers: { authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(httpTimeoutMs()),
     })
   } catch (err) {
-    throw Object.assign(new Error(`无法查询 Agnes 视频任务：${err.message}`), { kind: 'network' })
+    throw Object.assign(new Error(`无法查询 Agnes 视频任务：${networkErrText(err)}`), { kind: 'network' })
   }
   if (!res.ok) {
     const text = await res.text().catch(() => '')

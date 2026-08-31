@@ -212,4 +212,42 @@ test('时长/尺寸/比例非法：本地拦截（零请求）', async (t) => {
   }
 })
 
+test('--timeout 为 0、负数或非数字：本地拦截（不再静默回落到默认 600）', async (t) => {
+  const home = tmpDir('sgen-home-')
+  try {
+    const fake = await fakeAgnesVideo(t)
+    agnesConfig(home, `${fake.url}/v1`)
+
+    for (const args of [
+      ['video', '一只猫', '--timeout', '0'],
+      ['video', '一只猫', '--timeout', '-5'],
+      ['video', '一只猫', '--timeout', 'abc'],
+      ['status', 'vid_1', '--timeout', '0'],
+    ]) {
+      const r = await run(args, { env: { HOME: home.dir } })
+      assert.equal(r.code, 2, `参数 ${args} 应被拦截，输出：${r.stdout}${r.stderr}`)
+      assert.match(r.stderr, /--timeout/)
+    }
+    assert.equal(fake.creations.length, 0)
+  } finally {
+    home.cleanup()
+  }
+})
+
+test('Agnes 中国版区域配置：video 生成时不再每次刷域名提示', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeAgnesVideo(t)
+    writeConfig(home.dir, { agnes: { api_keys: ['ak-test'], base_url: `${fake.url}/v1`, region: 'china' } })
+
+    const r = await run(['video', '日落海滩', '--no-wait'], { env: { HOME: home.dir }, cwd: cwd.dir })
+    assert.equal(r.code, 0)
+    assert.ok(!r.stderr.includes('api.agnes-ai.cn'), `stderr 不应再刷域名提示：${r.stderr}`)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
 test('text 模式禁带媒体参数的行为已由工单 06 升级：媒体参数现用于推导 keyframe/reference 模式（见 video-advanced.test.js）', { skip: true }, () => {})

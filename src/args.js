@@ -24,7 +24,7 @@ export function parseArgs(argv, { flags = [], booleans = [], multi = [] } = {}) 
       if (!known) throw usageErr(`未知参数 --${key}（运行 sgen --help 查看用法）`)
       if (val === undefined) {
         val = argv[++i]
-        if (val === undefined) throw usageErr(`--${key} 缺少值`)
+        if (val === undefined || val.startsWith('--')) throw usageErr(`--${key} 缺少值`)
       }
       if (multi.includes(key)) {
         ;(out.values[key] ??= []).push(val)

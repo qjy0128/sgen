@@ -1,11 +1,23 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import { usageErr } from './errors.js'
+import { PROVIDERS } from './catalog.js'
 
 export const DEFAULT_BASE_URLS = {
   sensenova: 'https://token.sensenova.cn/v1',
   agnes: 'https://apihub.agnes-ai.com/v1',
 }
+
+// 各供应商 Key 对应的环境变量名（兜底单 Key；报错提示也用同一份）
+export const PROVIDER_ENV_KEYS = {
+  sensenova: 'SENSENOVA_API_KEY',
+  agnes: 'AGNES_API_KEY',
+}
+
+// Agnes 双区提示：只在此处维护一份，由 config 命令展示（生成命令不再每次刷 stderr）
+export const AGNES_CHINA_HINT =
+  '提示：Agnes 中国版接口为 api.agnes-ai.cn（国际版为 apihub.agnes-ai.com）；两版 Key 目前通用，官方未承诺长期保持。'
 
 // Agnes 双区：国际版与中国版接口域名不同（Key 目前通用，官方未承诺长期保持）
 export const AGNES_REGIONS = {
@@ -56,4 +68,15 @@ export function loadConfig() {
       region,
     },
   }
+}
+
+// 取某供应商配置；无 Key 时报错并指出对应环境变量名（image/video/status 共用）
+export function resolveProviderConfig(providerId) {
+  const cfg = loadConfig()[providerId]
+  if (!cfg.api_keys.length) {
+    throw usageErr(
+      `未找到${PROVIDERS[providerId].label} API Key。请运行 sgen config init 配置，或设置环境变量 ${PROVIDER_ENV_KEYS[providerId]}。`,
+    )
+  }
+  return cfg
 }

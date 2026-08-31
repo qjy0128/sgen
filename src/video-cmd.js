@@ -1,6 +1,6 @@
 import { parseArgs } from './args.js'
 import { usageErr } from './errors.js'
-import { loadConfig } from './config.js'
+import { resolveProviderConfig } from './config.js'
 import { findModel, DEFAULT_VIDEO_MODEL, providerForModelId, PROVIDERS } from './catalog.js'
 import { validateVideoParams } from './validate.js'
 import { createVideoTask, queryVideoTask } from './agnes.js'
@@ -12,6 +12,14 @@ const POLL_INTERVAL_MS = 3000
 const DEFAULT_TIMEOUT_S = 600
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// --timeout 必须为正数秒；0/负数/非数字本地拦截（不再静默回落默认值）
+function parseTimeoutMs(value) {
+  if (value === undefined) return DEFAULT_TIMEOUT_S * 1000
+  const n = Number(value)
+  if (!Number.isFinite(n) || n <= 0) throw usageErr(`--timeout 须为正数秒（当前：${value}）`)
+  return n * 1000
+}
 
 const VIDEO_FLAGS = {
   flags: [
@@ -67,19 +75,6 @@ async function waitUntilDone({ baseUrl, apiKey, videoId, model, timeoutMs }) {
     }
     await sleep(POLL_INTERVAL_MS)
   }
-}
-
-async function resolveAgnes(providerId) {
-  const cfg = loadConfig()[providerId]
-  if (!cfg.api_keys.length) {
-    throw usageErr('未找到 Agnes API Key。请运行 sgen config init 配置，或设置环境变量 AGNES_API_KEY。')
-  }
-  if (cfg.region === 'china') {
-    console.error(
-      '提示：Agnes 中国版接口为 api.agnes-ai.cn（国际版为 apihub.agnes-ai.com）；两版 Key 目前通用，官方未承诺长期保持。',
-    )
-  }
-  return cfg
 }
 
 // v2.0 的 width/height 由 档位+比例 推导（服务端会归一化到最近预设）
@@ -208,9 +203,9 @@ export async function videoCmd(argv) {
     }
   }
 
-  const cfg = await resolveAgnes('agnes')
+  const cfg = resolveProviderConfig('agnes')
   const noWait = Boolean(v['no-wait'])
-  const timeoutMs = (Number(v.timeout) || DEFAULT_TIMEOUT_S) * 1000
+  const timeoutMs = parseTimeoutMs(v.timeout)
 
   const startedAt = Date.now()
   console.error(`正在创建视频任务（${modelId}，${payload.mode ?? payload.extra_body?.mode ?? 'ti2vid'} 模式）…`)
@@ -278,9 +273,9 @@ export async function statusCmd(argv) {
   if (!videoId) throw usageErr('缺少 <video_id>（运行 sgen video --no-wait 可拿到任务号）')
 
   const modelId = args.values.model ?? DEFAULT_VIDEO_MODEL
-  const cfg = await resolveAgnes('agnes')
+  const cfg = resolveProviderConfig('agnes')
 
-  const timeoutMs = (Number(args.values.timeout) || DEFAULT_TIMEOUT_S) * 1000
+  const timeoutMs = parseTimeoutMs(args.values.timeout)
   let info = await callWithKeyPool({
     providerId: 'agnes',
     label: PROVIDERS.agnes.label,

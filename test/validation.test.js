@@ -176,3 +176,7 @@ test('未知模型名：跳过本地校验直接透传（model 与 size 原样�
 test('未知模型名 + --ratio：本地拦截（无从校验）', async (t) => {
   await assertRejected(t, ['--model', 'sensenova-u2-pro', '--ratio', '16:9'], /--ratio/)
 })
+
+test('flag 的值以 -- 开头（如 --size --json）：视为缺值本地拦截', async (t) => {
+  await assertRejected(t, ['--size', '--json'], /--size 缺少值/)
+})

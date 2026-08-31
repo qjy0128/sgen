@@ -35,7 +35,8 @@ export function maskKey(key) {
 }
 
 // Key 池：按持久化游标轮转起步（跨调用分摊额度）；
-// 401/403/429 自动换下一把重试一轮，全部失败才抛错并逐把汇总；网络错误不换 Key
+// 401/403/429 自动换下一把重试一轮，全部失败才抛错并逐把汇总；网络错误不换 Key。
+// 游标策略：发生轮换后，下次调用从本次成功的好 Key 起步（跳过已知坏 Key，不再每次浪费一次请求）
 export async function callWithKeyPool({ providerId, label, keys, fn }) {
   const cursor = readCursor(providerId) % keys.length
   const order = [...keys.slice(cursor), ...keys.slice(0, cursor)]
@@ -44,11 +45,12 @@ export async function callWithKeyPool({ providerId, label, keys, fn }) {
   for (const key of order) {
     try {
       const result = await fn(key)
-      writeCursor(providerId, (keys.indexOf(key) + 1) % keys.length)
+      writeCursor(providerId, failures.length ? keys.indexOf(key) : (keys.indexOf(key) + 1) % keys.length)
       return result
     } catch (err) {
       if (err.kind === 'api' && ROTATE_ON_STATUS.includes(err.status) && err.rotatable !== false) {
         failures.push(`  · ${maskKey(key)}：${err.message.split('\n')[0]}`)
+        writeCursor(providerId, (keys.indexOf(key) + 1) % keys.length)
         continue
       }
       throw err

@@ -109,3 +109,24 @@ test('不支持图生图的模型（u1-fast）传 --image：本地拦截', async
     cwd.cleanup()
   }
 })
+
+test('不支持图生图的模型 + 不存在的参考图：先报能力不支持（不浪费文件读取）', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeSensenova(t)
+    writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
+
+    const r = await run(['image', '一只猫', '--model', 'sensenova-u1-fast', '--image', '/nonexistent/ref.png'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(r.code, 2)
+    assert.match(r.stderr, /不支持图生图/)
+    assert.ok(!r.stderr.includes('文件不存在'), '应先拦截能力，再触碰文件')
+    assert.equal(fake.calls.length, 0)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
