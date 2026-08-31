@@ -26,7 +26,7 @@ async function assertRejected(t, args, stderrPattern) {
 
     const r = await run(['image', '一只猫', ...args], { env: { HOME: home.dir }, cwd: cwd.dir })
     assert.equal(r.code, 2, `应本地拦截，实际输出：${r.stdout}${r.stderr}`)
-    assert.match(r.stderr, stderrPattern)
+    assert.match(`${r.stdout}${r.stderr}`, stderrPattern)
     assert.equal(fake.calls.length, 0, '非法参数不应发出任何 HTTP 请求')
     assert.equal(fs.readdirSync(cwd.dir).length, 0)
   } finally {

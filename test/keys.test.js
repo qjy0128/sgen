@@ -58,6 +58,55 @@ test('多把 Key 按序轮转：两次调用分别从不同 Key 起步（分摊�
   }
 })
 
+test('更新 Key 游标时保留更新检查和视频任务状态', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeSensenova(t)
+    writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
+    const stateFile = path.join(home.dir, '.sgen', 'state.json')
+    fs.writeFileSync(
+      stateFile,
+      JSON.stringify({ remoteVersion: '9.9.9', tasks: [{ video_id: 'vid-old', model: 'agnes-video-v2.0' }] }),
+    )
+
+    const r = await run(['image', '一只猫'], { env: { HOME: home.dir }, cwd: cwd.dir })
+    assert.equal(r.code, 0)
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+    assert.equal(state.remoteVersion, '9.9.9')
+    assert.equal(state.tasks[0].video_id, 'vid-old')
+    assert.equal(state.sensenova.cursor, 0)
+    assert.equal(fs.statSync(stateFile).mode & 0o777, 0o600)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('两条命令并发更新状态时文件仍完整且保留其他字段', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeSensenova(t, { keys: ['sk-a', 'sk-b'] })
+    writeConfig(home.dir, { sensenova: { api_keys: ['sk-a', 'sk-b'], base_url: `${fake.url}/v1` } })
+    const stateFile = path.join(home.dir, '.sgen', 'state.json')
+    fs.writeFileSync(stateFile, JSON.stringify({ remoteVersion: '9.9.9' }))
+
+    const [a, b] = await Promise.all([
+      run(['image', '第一张'], { env: { HOME: home.dir }, cwd: cwd.dir }),
+      run(['image', '第二张'], { env: { HOME: home.dir }, cwd: cwd.dir }),
+    ])
+    assert.equal(a.code, 0)
+    assert.equal(b.code, 0)
+    const state = JSON.parse(fs.readFileSync(stateFile, 'utf8'))
+    assert.equal(state.remoteVersion, '9.9.9')
+    assert.ok(Number.isInteger(state.sensenova.cursor))
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
 test('坏 Key 被跳过后不再优先尝试：下次调用直接从好 Key 起步', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')

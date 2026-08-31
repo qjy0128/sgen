@@ -99,6 +99,23 @@ test('config init：保留已有 base_url 覆写', async () => {
   }
 })
 
+test('config init：Key 留空时保留已有 Key，不会误清空', async () => {
+  const home = tmpDir('sgen-home-')
+  try {
+    writeConfig(home.dir, {
+      sensenova: { api_keys: ['sk-old'] },
+      agnes: { api_keys: ['ak-old'], region: 'international' },
+    })
+    const r = await run(['config', 'init'], { env: { HOME: home.dir }, stdin: '\n\n\n' })
+    assert.equal(r.code, 0)
+    const cfg = readConfig(home.dir)
+    assert.deepEqual(cfg.providers.sensenova.api_keys, ['sk-old'])
+    assert.deepEqual(cfg.providers.agnes.api_keys, ['ak-old'])
+  } finally {
+    home.cleanup()
+  }
+})
+
 test('config list：Key 打码显示，不泄露完整 Key', async () => {
   const home = tmpDir('sgen-home-')
   try {
@@ -133,12 +150,16 @@ test('config set：region 切换（含提醒）、api_keys 逗号转数组、非
 
     const r3 = await run(['config', 'set', 'foo.bar', 'x'], { env: { HOME: home.dir } })
     assert.equal(r3.code, 2)
+
+    const r4 = await run(['config', 'set', 'agnes.base_url', 'file:///tmp/api'], { env: { HOME: home.dir } })
+    assert.equal(r4.code, 2)
+    assert.match(r4.stderr, /http/)
   } finally {
     home.cleanup()
   }
 })
 
-test('config test：逐把 Key 连通性报告（好 Key 连通、坏 Key 鉴权失败、未配置跳过）', async (t) => {
+test('config test：任一 Key 失败时返回 1，且支持结构化结果', async (t) => {
   const home = tmpDir('sgen-home-')
   try {
     const fake = await fakeSensenova(t, { keys: ['sk-good'] })
@@ -147,12 +168,34 @@ test('config test：逐把 Key 连通性报告（好 Key 连通、坏 Key 鉴权
     })
 
     const r = await run(['config', 'test'], { env: { HOME: home.dir } })
-    assert.equal(r.code, 0)
+    assert.equal(r.code, 1)
     assert.match(r.stdout, /连通（HTTP 200）/)
     assert.match(r.stdout, /鉴权失败（HTTP 401）/)
     assert.match(r.stdout, /未配置/)
     assert.ok(!r.stdout.includes('sk-good'), '完整 Key 不应出现')
     assert.ok(r.stdout.includes('***'))
+
+    const jsonRun = await run(['config', 'test', '--json'], { env: { HOME: home.dir } })
+    assert.equal(jsonRun.code, 1)
+    const json = JSON.parse(jsonRun.stdout)
+    assert.equal(json.ok, false)
+    assert.ok(json.results.some((x) => x.status === 'ok'))
+    assert.ok(json.results.some((x) => x.status === 'auth_failed'))
+    assert.ok(!jsonRun.stdout.includes('sk-good'))
+  } finally {
+    home.cleanup()
+  }
+})
+
+test('配置目录和配置文件只允许当前用户访问', async () => {
+  const home = tmpDir('sgen-home-')
+  try {
+    const r = await run(['config', 'set', 'sensenova.api_keys', 'sk-secret'], { env: { HOME: home.dir } })
+    assert.equal(r.code, 0)
+    const dirMode = fs.statSync(path.join(home.dir, '.sgen')).mode & 0o777
+    const fileMode = fs.statSync(path.join(home.dir, '.sgen', 'config.json')).mode & 0o777
+    assert.equal(dirMode, 0o700)
+    assert.equal(fileMode, 0o600)
   } finally {
     home.cleanup()
   }

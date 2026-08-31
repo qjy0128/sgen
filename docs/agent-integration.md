@@ -59,9 +59,10 @@
 需要产出图片或视频时（配图/海报/图生图/文生视频/图生视频/首尾帧/参考素材），直接在终端调用 `sgen`，不要自己写 HTTP 调用：
 - 生图：`sgen image "提示词" [--size 2K] [--ratio 16:9] [--image 参考图...] [--model 模型名] [--json]`
 - 生视频：`sgen video "提示词" [--seconds 5] [--first-frame 图] [--last-frame 图] [--ref-image 图] [--ref-audio 音频] [--no-wait]`
-- 查询/续等视频任务：`sgen status <video_id> --wait`；查模型与限制：`sgen models`
+- 查询/续等视频任务：`sgen status <video_id> --wait`（本机自动找回模型）；查模型与限制：`sgen models`
 - 默认模型免费；唯一收费模型 agnes-video-2.5 必须显式 `--model` 点名且先出预估费用
-- 参考素材传本地路径；stdout 输出本地文件路径；退出码 0 成功 / 2 用法错 / 1 API 错
+- 参考素材传本地路径；已有输出默认不覆盖，确认后才用 `--force`；`--json` 的成功与失败都从 stdout 读取；退出码 0 成功 / 2 用法错 / 1 API 错
+- 生成请求网络中断时不会自动重试，先去平台控制台检查，避免重复生成或扣费
 - 详细用法：`sgen --help` 或 ~/.agents/skills/sgen/SKILL.md
 ```
 

@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node: [22, 24]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run check
+      - run: npm pack --dry-run --cache "$RUNNER_TEMP/npm-cache"
+
+  version:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: 检查代码改动是否更新版本号
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if git diff --quiet "$BASE_SHA" -- src bin package.json; then
+            exit 0
+          fi
+          old_version=$(git show "$BASE_SHA:package.json" | node -e "let s='';process.stdin.on('data',c=>s+=c);process.stdin.on('end',()=>console.log(JSON.parse(s).version))")
+          new_version=$(node -p "require('./package.json').version")
+          if [ "$old_version" = "$new_version" ]; then
+            echo "代码已变化，但 package.json version 未更新"
+            exit 1
+          fi

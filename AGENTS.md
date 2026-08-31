@@ -5,7 +5,7 @@
 ## 本仓库须知
 
 - 本仓库就是 `sgen` 命令的本体（`npm link` 已全局安装，`bin/sgen.js` 为入口）；改代码后无需重新安装，直接生效。
-- 测试：`npm test`（黑盒：子进程跑 CLI + 本地假服务器，不打真实 API）；真机冒烟：`scripts/smoke`。
+- 测试：`npm test`（黑盒：子进程跑 CLI + 本地假服务器，不打真实 API）；提交前完整检查：`npm run check`；真机冒烟：`scripts/smoke`。
 - 规格与工单在 `.scratch/sgen-cli/`；模型能力/限制的唯一事实来源是 `src/catalog.js`（改限制先改它，测试与 README 跟随）。
 - 自动更新检查以 main 分支 `package.json` 的 `version` 为新鲜度判据：**合并改动到 main 必须 bump version**，否则用户永远收不到更新提示。
 - 技能说明源文件在 `skill/sgen/SKILL.md`，正本安装于 `~/.agents/skills/sgen/`，修改后需同步（README 与 docs/agent-integration.md 有同步说明）。

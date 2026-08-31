@@ -177,6 +177,30 @@ test('24 小时内不重复发检查请求', async (t) => {
   }
 })
 
+test('多条命令同时启动时只有一个后台进程发更新请求', async (t) => {
+  const home = tmpHome()
+  try {
+    const reg = await fakeRegistry(t, '99.0.0')
+    const env = { HOME: home.dir, SGEN_UPDATE_CHECK_URL: reg.url }
+    const runs = await Promise.all([
+      run(['models'], { env, updateCheck: true }),
+      run(['models'], { env, updateCheck: true }),
+      run(['models'], { env, updateCheck: true }),
+    ])
+    assert.ok(runs.every((r) => r.code === 0))
+    await waitFor(() => {
+      try {
+        return JSON.parse(fs.readFileSync(stateFile(home.dir), 'utf8')).checkedAt > 0
+      } catch {
+        return false
+      }
+    })
+    assert.equal(reg.hits(), 1)
+  } finally {
+    home.cleanup()
+  }
+})
+
 test('同一版本当天已提示过：再次运行不重复提示', async (t) => {
   const home = tmpHome()
   try {

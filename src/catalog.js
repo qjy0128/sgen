@@ -20,6 +20,7 @@ export const MODELS = [
     free: true,
     sync: true,
     caps: ['文生图', '图生图'],
+    input: { referenceImages: true },
     // 真实接口只收 auto 或 WIDTHxHEIGHT（32 倍数、512–4096、≤3:1）；
     // 1K/2K/4K 档位由工具本地换算为精确像素（kTiers=长边像素）
     size: {
@@ -37,6 +38,7 @@ export const MODELS = [
     free: true,
     sync: true,
     caps: ['文生图'],
+    input: { referenceImages: false },
     size: { tiers: ['1K', '2K'], wxh: null },
     ratios: ['1:1', '16:9', '9:16', '2:3', '3:2', '3:4', '4:3', '4:5', '5:4', '9:21'],
     pixels: {
@@ -74,6 +76,7 @@ export const MODELS = [
     free: true,
     sync: true,
     caps: ['文生图', '图生图'],
+    input: { referenceImages: true },
     size: { tiers: ['1K', '2K', '3K', '4K'], wxh: true },
     ratios: ['1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9'],
     note: '限免 $0；图生图前 3 张参考图免费',
@@ -85,6 +88,7 @@ export const MODELS = [
     free: true,
     sync: true,
     caps: ['文生图', '图生图'],
+    input: { referenceImages: true },
     size: { tiers: null, wxh: true },
     ratios: null,
     note: '限免 $0；尺寸用精确像素写法（如 1024x768）',
@@ -99,7 +103,18 @@ export const MODELS = [
     size: { tiers: ['480p', '720p', '1080p'], wxh: null },
     ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
     seconds: '按帧数：num_frames≤441 且 8n+1，frame_rate 1–60（约 18 秒封顶）',
-    limits: { frames: { max: 441, defaultSize: '720p', defaultRatio: '16:9' } },
+    request: { family: 'agnes-v20', modes: ['text', 'keyframe'] },
+    limits: {
+      frames: {
+        min: 9,
+        max: 441,
+        step: 8,
+        frameRate: { min: 1, max: 60 },
+        shortSides: { '480p': 480, '720p': 720, '1080p': 1080 },
+        defaultSize: '720p',
+        defaultRatio: '16:9',
+      },
+    },
     note: '限免 $0/秒',
   },
   {
@@ -113,6 +128,11 @@ export const MODELS = [
     size: { tiers: ['720P'], wxh: null },
     ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
     seconds: '4–12 秒（默认 5）',
+    request: {
+      family: 'agnes-v25',
+      modes: ['text', 'keyframe', 'reference'],
+      media: { maxRefImages: 5, refAudio: true, refVideo: false },
+    },
     limits: { seconds: { min: 4, max: 12, default: 5 } },
     note: '限免 $0/秒；不支持参考视频',
   },
@@ -126,6 +146,11 @@ export const MODELS = [
     size: { tiers: ['720P', '960P', '2K'], wxh: null },
     ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
     seconds: '4–12 秒（默认 5）',
+    request: {
+      family: 'agnes-v25',
+      modes: ['text', 'keyframe', 'reference'],
+      media: { maxRefImages: null, refAudio: true, refVideo: true },
+    },
     limits: { seconds: { min: 4, max: 12, default: 5 } },
     pricing: { perSecond: { '720P': 0.025, '960P': 0.04, '2K': 0.055 }, extraRefImageFrom6: 0.005 },
     note: '收费：720P $0.025/秒、960P $0.040/秒、2K $0.055/秒（计费=输出+输入视频秒数）',
@@ -134,6 +159,35 @@ export const MODELS = [
 
 export function findModel(id) {
   return MODELS.find((m) => m.id === id) ?? null
+}
+
+export function assertCatalog() {
+  const errors = []
+  const ids = new Set()
+  for (const model of MODELS) {
+    if (ids.has(model.id)) errors.push(`模型名重复：${model.id}`)
+    ids.add(model.id)
+    if (!PROVIDERS[model.provider]) errors.push(`${model.id} 的供应商不存在：${model.provider}`)
+    if (typeof model.free !== 'boolean') errors.push(`${model.id} 缺少 free 标记`)
+    if (model.type === 'image' && typeof model.input?.referenceImages !== 'boolean') {
+      errors.push(`${model.id} 缺少 referenceImages 能力标记`)
+    }
+    if (model.type === 'video' && !model.request?.family) errors.push(`${model.id} 缺少视频请求族`)
+    if (!model.free && !model.pricing) errors.push(`${model.id} 是收费模型但缺少 pricing`)
+  }
+  for (const [id, type] of [
+    [DEFAULT_IMAGE_MODEL, 'image'],
+    [DEFAULT_VIDEO_MODEL, 'video'],
+  ]) {
+    const model = findModel(id)
+    if (!model) errors.push(`默认${type}模型不存在：${id}`)
+    else {
+      if (model.type !== type) errors.push(`默认模型类型错误：${id}`)
+      if (!model.free) errors.push(`默认模型必须免费：${id}`)
+      if (!model.isDefault) errors.push(`默认模型缺少 isDefault：${id}`)
+    }
+  }
+  if (errors.length) throw new Error(`模型目录不合法：\n${errors.join('\n')}`)
 }
 
 // 未知模型的路由启发：按名称前缀归到供应商，其余默认商汤

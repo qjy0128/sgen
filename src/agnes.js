@@ -27,7 +27,7 @@ export async function createVideoTask({ baseUrl, apiKey, payload }) {
 }
 
 // 视频任务查询：GET <域名根>/agnesapi?video_id=&model_name=（2.5 系列轮询需带 model_name）
-export async function queryVideoTask({ baseUrl, apiKey, videoId, model }) {
+export async function queryVideoTask({ baseUrl, apiKey, videoId, model, timeoutMs = httpTimeoutMs() }) {
   const origin = new URL(baseUrl).origin
   const params = new URLSearchParams({ video_id: videoId })
   if (model) params.set('model_name', model)
@@ -36,7 +36,7 @@ export async function queryVideoTask({ baseUrl, apiKey, videoId, model }) {
   try {
     res = await fetch(`${origin}/agnesapi?${params}`, {
       headers: { authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(httpTimeoutMs()),
+      signal: AbortSignal.timeout(timeoutMs),
     })
   } catch (err) {
     throw Object.assign(new Error(`无法查询 Agnes 视频任务：${networkErrText(err)}`), { kind: 'network' })

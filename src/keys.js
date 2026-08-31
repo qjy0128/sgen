@@ -1,56 +1,36 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
+import { readProviderCursor, writeProviderCursor } from './state.js'
+import { createHash } from 'node:crypto'
 
 // 触发换 Key 的状态码：鉴权失败（Key 坏了）与限流（额度撞了）
 const ROTATE_ON_STATUS = [401, 403, 429]
-
-function statePath() {
-  return path.join(os.homedir(), '.sgen', 'state.json')
-}
-
-function readCursor(providerId) {
-  try {
-    return JSON.parse(fs.readFileSync(statePath(), 'utf8'))[providerId]?.cursor ?? 0
-  } catch {
-    return 0
-  }
-}
-
-function writeCursor(providerId, cursor) {
-  let state = {}
-  try {
-    state = JSON.parse(fs.readFileSync(statePath(), 'utf8'))
-  } catch {
-    // 无状态文件时新建
-  }
-  state[providerId] = { cursor }
-  fs.mkdirSync(path.dirname(statePath()), { recursive: true })
-  fs.writeFileSync(statePath(), JSON.stringify(state, null, 2))
-}
 
 export function maskKey(key) {
   if (key.length <= 8) return `${key.slice(0, 2)}***`
   return `${key.slice(0, 3)}***${key.slice(-4)}`
 }
 
+export function fingerprintKey(key) {
+  return createHash('sha256').update(key).digest('hex').slice(0, 16)
+}
+
 // Key 池：按持久化游标轮转起步（跨调用分摊额度）；
 // 401/403/429 自动换下一把重试一轮，全部失败才抛错并逐把汇总；网络错误不换 Key。
 // 游标策略：发生轮换后，下次调用从本次成功的好 Key 起步（跳过已知坏 Key，不再每次浪费一次请求）
-export async function callWithKeyPool({ providerId, label, keys, fn }) {
-  const cursor = readCursor(providerId) % keys.length
+export async function callWithKeyPool({ providerId, label, keys, preferredKey, fn }) {
+  const preferredIndex = preferredKey ? keys.indexOf(preferredKey) : -1
+  const cursor = preferredIndex >= 0 ? preferredIndex : readProviderCursor(providerId) % keys.length
   const order = [...keys.slice(cursor), ...keys.slice(0, cursor)]
   const failures = []
 
   for (const key of order) {
     try {
       const result = await fn(key)
-      writeCursor(providerId, failures.length ? keys.indexOf(key) : (keys.indexOf(key) + 1) % keys.length)
+      writeProviderCursor(providerId, failures.length ? keys.indexOf(key) : (keys.indexOf(key) + 1) % keys.length)
       return result
     } catch (err) {
       if (err.kind === 'api' && ROTATE_ON_STATUS.includes(err.status) && err.rotatable !== false) {
         failures.push(`  · ${maskKey(key)}：${err.message.split('\n')[0]}`)
-        writeCursor(providerId, (keys.indexOf(key) + 1) % keys.length)
+        writeProviderCursor(providerId, (keys.indexOf(key) + 1) % keys.length)
         continue
       }
       throw err

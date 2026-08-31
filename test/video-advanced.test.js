@@ -80,6 +80,25 @@ test('仅首帧：keyframe 模式，不带 last_frame', async (t) => {
   }
 })
 
+test('只传尾帧会在本地拒绝', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const { cwd, b } = mediaSetup(t, home)
+  try {
+    const fake = await fakeAgnesVideo(t)
+    agnesConfig(home, `${fake.url}/v1`)
+    const r = await run(['video', '转场', '--last-frame', b], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(r.code, 2)
+    assert.match(r.stderr, /--first-frame/)
+    assert.equal(fake.creations.length, 0)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
 test('reference 模式：参考图（Data URI）与参考音频正确到达', async (t) => {
   const home = tmpDir('sgen-home-')
   const { cwd, png, mp3, a, b } = mediaSetup(t, home)
@@ -190,6 +209,51 @@ test('收费模型 2.5：显式点名可用，参考视频（含起始秒）到�
     assert.equal(body.videos.length, 1)
     assert.equal(body.videos[0].start_seconds, 2)
     assert.ok(body.videos[0].url.startsWith('data:video/mp4;base64,'))
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('--video-start 必须配参考视频，且只能是非负数', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const { cwd, mp4 } = mediaSetup(t, home)
+  try {
+    const fake = await fakeAgnesVideo(t)
+    agnesConfig(home, `${fake.url}/v1`)
+    const base = ['video', '续写', '--model', 'agnes-video-2.5']
+    for (const args of [
+      [...base, '--video-start', '2'],
+      [...base, '--ref-video', mp4, '--video-start', '-1'],
+      [...base, '--ref-video', mp4, '--video-start', 'abc'],
+    ]) {
+      const r = await run(args, { env: { HOME: home.dir }, cwd: cwd.dir })
+      assert.equal(r.code, 2)
+      assert.match(r.stderr, /--video-start/)
+    }
+    assert.equal(fake.creations.length, 0)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('未知 Agnes 视频模型会透传 seconds、size、ratio，不静默丢参数', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const { cwd } = mediaSetup(t, home)
+  try {
+    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
+    agnesConfig(home, `${fake.url}/v1`)
+    const r = await run(
+      ['video', '未来模型', '--model', 'agnes-video-3.0-flash', '--seconds', '7', '--size', '1080P', '--ratio', '16:9'],
+      { env: { HOME: home.dir }, cwd: cwd.dir },
+    )
+    assert.equal(r.code, 0)
+    assert.match(r.stderr, /无法判断是否收费/)
+    const body = fake.creations[0].body
+    assert.equal(body.seconds, '7')
+    assert.equal(body.size, '1080P')
+    assert.equal(body.aspect_ratio, '16:9')
   } finally {
     home.cleanup()
     cwd.cleanup()

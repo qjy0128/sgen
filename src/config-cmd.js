@@ -4,6 +4,7 @@ import { PROVIDERS } from './catalog.js'
 import { maskKey } from './keys.js'
 import { usageErr } from './errors.js'
 import { httpTimeoutMs } from './api.js'
+import { parseArgs } from './args.js'
 
 function splitKeys(input) {
   return input
@@ -52,8 +53,8 @@ async function askAll(questions) {
 
 async function configInit() {
   const [snInput, agnesInput, inChinaInput] = await askAll([
-    '商汤 API Key（多把用英文逗号分隔，回车跳过）：',
-    'Agnes API Key（多把用英文逗号分隔，回车跳过）：',
+    '商汤 API Key（多把用英文逗号分隔，回车保留已有配置）：',
+    'Agnes API Key（多把用英文逗号分隔，回车保留已有配置）：',
     '是否在中国境内？（只跟接入的 API 域名相关，功能完全一致）[Y/N，回车默认 N]：',
   ])
   // Y/yes/是 → 中国版域名；其余（含回车、N、无效输入）→ 国际版
@@ -61,13 +62,35 @@ async function configInit() {
 
   const raw = readRawConfig()
   const providers = raw.providers ?? {}
-  providers.sensenova = { ...(providers.sensenova ?? {}), api_keys: splitKeys(snInput) }
-  providers.agnes = { ...(providers.agnes ?? {}), api_keys: splitKeys(agnesInput), region }
+  const oldSensenova = providers.sensenova ?? {}
+  const oldAgnes = providers.agnes ?? {}
+  providers.sensenova = {
+    ...oldSensenova,
+    api_keys: snInput ? splitKeys(snInput) : (oldSensenova.api_keys ?? []),
+  }
+  providers.agnes = {
+    ...oldAgnes,
+    api_keys: agnesInput ? splitKeys(agnesInput) : (oldAgnes.api_keys ?? []),
+    region,
+  }
   saveRawConfig({ ...raw, providers })
 
   console.log(`已写入 ${configPath()}`)
   if (region === 'china') console.error(AGNES_CHINA_HINT)
   return 0
+}
+
+function parseBaseUrl(value) {
+  let url
+  try {
+    url = new URL(value)
+  } catch {
+    throw usageErr(`接口地址无效：${value}`)
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw usageErr('接口地址只支持 http:// 或 https://')
+  }
+  return value.replace(/\/+$/, '')
 }
 
 // 可设项注册表：解析函数 + 帮助文案（含义与示例），帮助文本由同一份数据渲染
@@ -93,12 +116,12 @@ const SETTABLE = {
     example: 'sgen config set agnes.region china',
   },
   'sensenova.base_url': {
-    parse: (v) => v,
+    parse: parseBaseUrl,
     desc: '进阶：覆写商汤接口地址',
     example: 'sgen config set sensenova.base_url https://token.sensenova.cn/v1',
   },
   'agnes.base_url': {
-    parse: (v) => v,
+    parse: parseBaseUrl,
     desc: '进阶：覆写 Agnes 接口地址',
     example: 'sgen config set agnes.base_url https://apihub.agnes-ai.com/v1',
   },
@@ -166,16 +189,25 @@ function configList() {
 }
 
 // 连通性检查：逐把 Key 探测 <base_url>/models（只看通不通与鉴权，不产生生成费用）
-async function configTest() {
+async function configTest(argv) {
+  const args = parseArgs(argv, { booleans: ['json'] })
+  if (args.positionals.length) throw usageErr(`config test 不接受位置参数：${args.positionals.join(' ')}`)
   const cfg = loadConfig()
+  const results = []
+  let failed = false
+  let checked = 0
   for (const pid of ['sensenova', 'agnes']) {
     const c = cfg[pid]
     const label = PROVIDERS[pid].label
     if (!c.api_keys.length) {
-      console.log(`${label}：未配置 Key，跳过`)
+      const item = { provider: pid, label, status: 'skipped', message: '未配置 Key，跳过' }
+      results.push(item)
+      if (!args.values.json) console.log(`${label}：${item.message}`)
       continue
     }
     for (const key of c.api_keys) {
+      checked++
+      const maskedKey = maskKey(key)
       let status
       try {
         const res = await fetch(`${c.base_url}/models`, {
@@ -184,17 +216,59 @@ async function configTest() {
         })
         status = res.status
       } catch (err) {
-        console.log(`${label} ${maskKey(key)}：✗ 无法连接（${String(err.message).split('\n')[0]}）`)
+        failed = true
+        const item = {
+          provider: pid,
+          label,
+          key: maskedKey,
+          status: 'network_error',
+          message: `无法连接（${String(err.message).split('\n')[0]}）`,
+        }
+        results.push(item)
+        if (!args.values.json) console.log(`${label} ${maskedKey}：✗ ${item.message}`)
         continue
       }
       if (status === 401 || status === 403) {
-        console.log(`${label} ${maskKey(key)}：✗ 鉴权失败（HTTP ${status}），Key 可能无效`)
+        failed = true
+        const item = {
+          provider: pid,
+          label,
+          key: maskedKey,
+          status: 'auth_failed',
+          http_status: status,
+          message: `鉴权失败（HTTP ${status}），Key 可能无效`,
+        }
+        results.push(item)
+        if (!args.values.json) console.log(`${label} ${maskedKey}：✗ ${item.message}`)
+      } else if (status >= 200 && status < 300) {
+        const item = {
+          provider: pid,
+          label,
+          key: maskedKey,
+          status: 'ok',
+          http_status: status,
+          message: `连通（HTTP ${status}）`,
+        }
+        results.push(item)
+        if (!args.values.json) console.log(`${label} ${maskedKey}：✓ ${item.message}`)
       } else {
-        console.log(`${label} ${maskKey(key)}：✓ 连通（HTTP ${status}）`)
+        failed = true
+        const item = {
+          provider: pid,
+          label,
+          key: maskedKey,
+          status: 'http_error',
+          http_status: status,
+          message: `接口异常（HTTP ${status}）`,
+        }
+        results.push(item)
+        if (!args.values.json) console.log(`${label} ${maskedKey}：✗ ${item.message}`)
       }
     }
   }
-  return 0
+  if (checked === 0) failed = true
+  if (args.values.json) console.log(JSON.stringify({ ok: !failed, results }))
+  return failed ? 1 : 0
 }
 
 export async function configCmd(argv) {
@@ -202,7 +276,7 @@ export async function configCmd(argv) {
   if (sub === 'init') return configInit()
   if (sub === 'set') return configSet(rest[0], rest[1])
   if (sub === 'list') return configList()
-  if (sub === 'test') return configTest()
+  if (sub === 'test') return configTest(rest)
   throw usageErr(
     [
       '用法：sgen config <子命令>',
@@ -210,7 +284,7 @@ export async function configCmd(argv) {
       '  set   设置单项：sgen config set <路径> <值>，可设置：',
       renderSettable(),
       '  list  查看当前配置（Key 打码显示）',
-      '  test  逐把 Key 连通性检查（✓ 连通 / ✗ 鉴权失败）',
+      '  test  逐把 Key 连通性检查（任一失败则退出码 1；支持 --json）',
     ].join('\n'),
   )
 }

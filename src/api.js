@@ -14,16 +14,6 @@ export function httpTimeoutMs() {
   return Number.isFinite(n) && n > 0 ? n : DEFAULT_HTTP_TIMEOUT_MS
 }
 
-// 连接类网络错误重试一次（同一路径同一参数）；超时与 API 错误不在此重试
-async function fetchWithRetry(url, init) {
-  try {
-    return await fetch(url, { ...init, signal: AbortSignal.timeout(httpTimeoutMs()) })
-  } catch (err) {
-    if (err.name === 'TimeoutError') throw err
-    return fetch(url, { ...init, signal: AbortSignal.timeout(httpTimeoutMs()) })
-  }
-}
-
 // 超时错误统一成人话；其余网络错误透传原始 message
 export function networkErrText(err) {
   return err.name === 'TimeoutError' ? `请求超时（${Math.round(httpTimeoutMs() / 1000)} 秒）` : err.message
@@ -33,10 +23,11 @@ export function networkErrText(err) {
 export async function postJson(url, { apiKey, body, label }) {
   let res
   try {
-    res = await fetchWithRetry(url, {
+    res = await fetch(url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: `Bearer ${apiKey}` },
       body: JSON.stringify(body),
+      signal: AbortSignal.timeout(httpTimeoutMs()),
     })
   } catch (err) {
     const origin = (() => {
@@ -46,7 +37,12 @@ export async function postJson(url, { apiKey, body, label }) {
         return url
       }
     })()
-    throw Object.assign(new Error(`无法连接${label}（${origin}）：${networkErrText(err)}`), { kind: 'network' })
+    throw Object.assign(
+      new Error(
+        `无法连接${label}（${origin}）：${networkErrText(err)}\n生成请求未自动重试，避免重复生成或重复扣费；若平台可能已收到请求，请先到控制台检查。`,
+      ),
+      { kind: 'network', uncertain: true },
+    )
   }
 
   if (!res.ok) {

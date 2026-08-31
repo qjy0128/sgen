@@ -1,6 +1,6 @@
 {
   "name": "sgen",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "面向 Agent 的免费生图/生视频命令行工具（商汤 SenseNova + Agnes）",
   "type": "module",
   "bin": {
@@ -24,7 +24,10 @@
     "agnes"
   ],
   "scripts": {
-    "test": "node --test 'test/*.test.js'"
+    "test": "node --test 'test/*.test.js'",
+    "check:syntax": "node scripts/check-syntax.js",
+    "check:docs": "node scripts/check-docs.js",
+    "check": "npm run check:syntax && npm run check:docs && npm test"
   },
   "engines": {
     "node": ">=22"

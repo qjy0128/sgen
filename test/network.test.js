@@ -18,7 +18,7 @@ function writeConfig(home, providers) {
   fs.writeFileSync(path.join(home, '.sgen', 'config.json'), JSON.stringify({ providers }))
 }
 
-test('首个请求连接被掐断：自动重试一次后成功（同一把 Key，不换 Key）', async (t) => {
+test('生成请求连接被掐断：不自动重试，避免重复生成或扣费', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -47,9 +47,11 @@ test('首个请求连接被掐断：自动重试一次后成功（同一把 Key�
     writeConfig(home.dir, { sensenova: { api_keys: ['sk-a', 'sk-b'], base_url: `${url}/v1` } })
 
     const r = await run(['image', '一只猫'], { env: { HOME: home.dir }, cwd: cwd.dir })
-    assert.equal(r.code, 0, `重试后应成功：${r.stderr}`)
-    assert.equal(attempts, 2, '恰好重试一次')
-    assert.equal(fs.readdirSync(cwd.dir).length, 1)
+    assert.equal(r.code, 1)
+    assert.equal(attempts, 1, '生成类 POST 不得自动重发')
+    assert.match(r.stderr, /未自动重试/)
+    assert.match(r.stderr, /重复生成|重复扣费/)
+    assert.equal(fs.readdirSync(cwd.dir).length, 0)
   } finally {
     home.cleanup()
     cwd.cleanup()
@@ -73,6 +75,39 @@ test('对端挂起不响应：按 SGEN_HTTP_TIMEOUT_MS 超时退出，报错含"
     assert.ok(Date.now() - startedAt < 5000, '应在超时后快速退出，而不是一直等')
     assert.equal(r.code, 1)
     assert.match(r.stderr, /请求超时/)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('下载失败不会泄露临时 URL 的签名参数', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    let origin
+    const { server, url } = await startServer(async (req, res) => {
+      origin = url
+      if (req.method === 'POST') {
+        await readBody(req)
+        res.writeHead(200, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ data: [{ url: `${origin}/broken.png?token=top-secret` }] }))
+        return
+      }
+      if (req.url.startsWith('/broken.png')) {
+        req.socket.destroy()
+        return
+      }
+      res.writeHead(404)
+      res.end()
+    })
+    t.after(() => server.close())
+    writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${url}/v1` } })
+
+    const r = await run(['image', '一只猫'], { env: { HOME: home.dir }, cwd: cwd.dir })
+    assert.equal(r.code, 1)
+    assert.match(r.stderr, /下载失败/)
+    assert.ok(!r.stderr.includes('top-secret'))
   } finally {
     home.cleanup()
     cwd.cleanup()

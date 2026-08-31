@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import { constants as bufferConstants } from 'node:buffer'
 import { usageErr } from './errors.js'
 
 const IMAGE_MIME = {
@@ -29,11 +30,26 @@ function toDataUri(filePath, mimeMap, what) {
   if (!fs.existsSync(filePath)) {
     throw usageErr(`${what}文件不存在：${filePath}`)
   }
+  let stat
+  try {
+    stat = fs.statSync(filePath)
+  } catch (err) {
+    throw usageErr(`无法读取${what}文件：${filePath}（${err.message}）`)
+  }
+  if (!stat.isFile()) throw usageErr(`${what}路径不是普通文件：${filePath}`)
+  const base64Length = Math.ceil(stat.size / 3) * 4
+  if (base64Length >= bufferConstants.MAX_STRING_LENGTH) {
+    throw usageErr(`${what}文件过大，转 Base64 会超过 Node.js 内存字符串上限：${filePath}`)
+  }
   const mime = mimeMap[path.extname(filePath).toLowerCase()]
   if (!mime) {
     throw usageErr(`不支持的${what}格式：${filePath}（支持 ${Object.keys(mimeMap).join('/')}）`)
   }
-  return `data:${mime};base64,${fs.readFileSync(filePath).toString('base64')}`
+  try {
+    return `data:${mime};base64,${fs.readFileSync(filePath).toString('base64')}`
+  } catch (err) {
+    throw usageErr(`无法读取${what}文件：${filePath}（${err.message}）`)
+  }
 }
 
 // 本地媒体 → Data URI（参考素材统一走 Base64，无需图床/对象存储）

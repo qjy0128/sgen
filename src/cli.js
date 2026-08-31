@@ -1,9 +1,9 @@
 import { resolveProviderConfig } from './config.js'
 import { generateImage as sensenovaGenerate } from './sensenova.js'
 import { generateImage as agnesGenerate } from './agnes.js'
-import { resolveOutPath, downloadTo } from './save.js'
+import { prepareOutPath, downloadTo } from './save.js'
 import { usageErr } from './errors.js'
-import { renderModels, findModel, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS } from './catalog.js'
+import { renderModels, findModel, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
 import { validateImageParams } from './validate.js'
 import { imageToDataUri } from './media.js'
 import { callWithKeyPool } from './keys.js'
@@ -28,6 +28,7 @@ image 选项：
   --ratio <比例>     宽高比（仅部分模型支持，见 sgen models）
   --image <路径>     参考图（可重复传多张，做图生图/多图合成）
   --out <路径>       输出文件或目录（默认当前目录自动命名）
+  --force            允许覆盖已存在的 --out 文件
   --json             以 JSON 输出结果
 
 video 选项：
@@ -46,13 +47,15 @@ video 选项：
   --no-wait          提交后立即返回 video_id，稍后用 sgen status 取片
   --timeout <秒>     等待上限（默认 600）
   --out <路径>       输出文件或目录（默认当前目录自动命名）
+  --force            允许覆盖已存在的 --out 文件
   --json             以 JSON 输出结果
 
 status 选项：
-  --model <名称>     任务所用模型（2.5 系列查询需带，默认 agnes-video-2.5-flash）
+  --model <名称>     任务所用模型（本机自动记忆；状态丢失时再填写）
   --wait             任务未完成时继续等待直至出片
   --timeout <秒>     等待上限（默认 600）
   --out <路径>       输出文件或目录（默认当前目录自动命名）
+  --force            允许覆盖已存在的 --out 文件
   --json             以 JSON 输出结果
 
 提示：--model / --size / --ratio 的可选值各模型不同，运行 sgen models 查看；
@@ -61,11 +64,14 @@ status 选项：
 async function imageCmd(argv) {
   const args = parseArgs(argv, {
     flags: ['model', 'size', 'ratio', 'out'],
-    booleans: ['json'],
+    booleans: ['json', 'force'],
     multi: ['image'],
   })
   const prompt = args.positionals[0]
   if (!prompt) throw usageErr(`缺少 <提示词>\n${USAGE}`)
+  if (args.positionals.length > 1) {
+    throw usageErr(`多余参数：${args.positionals.slice(1).join(' ')}（包含空格的提示词请用引号包住）`)
+  }
 
   const modelId = args.values.model ?? DEFAULT_IMAGE_MODEL
   const rec = findModel(modelId)
@@ -81,11 +87,19 @@ async function imageCmd(argv) {
 
   const providerId = rec ? rec.provider : providerForModelId(modelId)
 
-  if (rec && args.values.image && !rec.caps.includes('图生图')) {
+  if (rec && !rec.free && args.values.model === undefined) {
+    throw usageErr(`收费模型 ${modelId} 必须用 --model 显式指定`)
+  }
+  if (!rec) console.error(`⚠ ${modelId} 不在内置模型目录中，无法判断是否收费，请先到平台确认价格。`)
+  else if (!rec.free) console.error(`⚠ ${modelId} 为收费模型，请先到平台确认价格。`)
+
+  if (rec && args.values.image && !rec.input.referenceImages) {
     throw usageErr(`${modelId} 不支持图生图（--image）。sgen models 可查看各模型能力`)
   }
   const images = args.values.image?.map(imageToDataUri)
 
+  const force = Boolean(args.values.force)
+  const outPath = prepareOutPath(args.values.out, 'png', { force })
   const cfg = resolveProviderConfig(providerId)
 
   const startedAt = Date.now()
@@ -115,12 +129,20 @@ async function imageCmd(argv) {
             images,
           }),
   })
-  const outPath = resolveOutPath(args.values.out, 'png')
-  const file = await downloadTo(url, outPath)
+  const file = await downloadTo(url, outPath, { force, expectedKind: 'image' })
   const elapsedMs = Date.now() - startedAt
 
   if (args.values.json) {
-    console.log(JSON.stringify({ ok: true, model, file, elapsed_ms: elapsedMs }))
+    console.log(
+      JSON.stringify({
+        ok: true,
+        model,
+        size: size ?? null,
+        ratio: args.values.ratio ?? null,
+        file,
+        elapsed_ms: elapsedMs,
+      }),
+    )
   } else {
     console.log(file)
   }
@@ -130,6 +152,7 @@ async function imageCmd(argv) {
 async function runCommand(argv) {
   const [cmd, ...rest] = argv
   try {
+    assertCatalog()
     if (!cmd || cmd === '-h' || cmd === '--help') {
       console.log(USAGE)
       return 0
@@ -144,8 +167,24 @@ async function runCommand(argv) {
     if (cmd === 'config') return await configCmd(rest)
     throw usageErr(`未知命令：${cmd}\n${USAGE}`)
   } catch (err) {
-    console.error(err.message || String(err))
-    return err.kind === 'usage' ? 2 : 1
+    const code = err.kind === 'usage' ? 2 : 1
+    if (argv.includes('--json')) {
+      console.log(
+        JSON.stringify({
+          ok: false,
+          error: {
+            kind: err.kind ?? 'internal',
+            message: err.message || String(err),
+            ...(err.status ? { status: err.status } : {}),
+            ...(err.uncertain ? { uncertain: true } : {}),
+          },
+          exit_code: code,
+        }),
+      )
+    } else {
+      console.error(err.message || String(err))
+    }
+    return code
   }
 }
 

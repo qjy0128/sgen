@@ -32,6 +32,9 @@ test('文生视频全流程：提交→轮询（带 model_name）→出片自动
     const json = JSON.parse(r.stdout)
     assert.equal(json.ok, true)
     assert.equal(json.model, 'agnes-video-2.5-flash')
+    assert.equal(json.mode, 'text')
+    assert.equal(json.size, '720P')
+    assert.equal(json.seconds, 5)
     assert.ok(json.video_id)
 
     // 创建请求：text 模式、默认 5 秒、720P、Bearer 鉴权
@@ -51,10 +54,65 @@ test('文生视频全流程：提交→轮询（带 model_name）→出片自动
     // 出片下载为 mp4
     const files = fs.readdirSync(cwd.dir)
     assert.equal(files.length, 1)
-    assert.match(files[0], /^sgen-\d{8}-\d{6}-\d+\.mp4$/)
+    assert.match(files[0], /^sgen-\d{8}-\d{9}-[a-f0-9]{8}\.mp4$/)
     assert.deepEqual(fs.readFileSync(path.join(cwd.dir, files[0])), fake.mp4)
     assert.equal(path.basename(json.file), files[0])
     assert.ok(fs.existsSync(json.file))
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('非默认模型 no-wait 后，status 无需再次填写 model', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
+    agnesConfig(home, `${fake.url}/v1`)
+    const created = await run(
+      ['video', '慢镜头', '--model', 'agnes-video-v2.0', '--num-frames', '121', '--no-wait', '--json'],
+      { env: { HOME: home.dir }, cwd: cwd.dir },
+    )
+    assert.equal(created.code, 0)
+    const task = JSON.parse(created.stdout)
+    assert.match(task.hint, /--model agnes-video-v2\.0/)
+
+    const status = await run(['status', task.video_id, '--wait', '--json'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(status.code, 0)
+    const result = JSON.parse(status.stdout)
+    assert.equal(result.model, 'agnes-video-v2.0')
+    assert.ok(fake.polls.every((p) => p.modelName === 'agnes-video-v2.0'))
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('多 Key 创建异步任务后，status 优先使用创建任务的那把 Key', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeAgnesVideo(t, { key: 'ak-a', completeAfterPolls: 1 })
+    writeConfig(home.dir, {
+      agnes: { api_keys: ['ak-a', 'ak-b'], base_url: `${fake.url}/v1` },
+    })
+    const created = await run(['video', '城市', '--no-wait', '--json'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(created.code, 0)
+    const task = JSON.parse(created.stdout)
+
+    const status = await run(['status', task.video_id, '--wait', '--json'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(status.code, 0, `${status.stdout}${status.stderr}`)
+    assert.ok(fake.polls.every((p) => p.auth === 'Bearer ak-a'))
   } finally {
     home.cleanup()
     cwd.cleanup()
@@ -75,6 +133,33 @@ test('--seconds 与 --ratio 正确映射（8 秒、9:16）', async (t) => {
     assert.equal(r.code, 0)
     assert.equal(fake.creations[0].body.seconds, '8')
     assert.equal(fake.creations[0].body.aspect_ratio, '9:16')
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('视频输出已存在时在创建任务前拒绝，--force 才允许覆盖', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
+    agnesConfig(home, `${fake.url}/v1`)
+    const out = path.join(cwd.dir, 'result.mp4')
+    fs.writeFileSync(out, '原文件')
+
+    const rejected = await run(['video', '海浪', '--out', out], { env: { HOME: home.dir }, cwd: cwd.dir })
+    assert.equal(rejected.code, 2)
+    assert.equal(fake.creations.length, 0)
+    assert.equal(fs.readFileSync(out, 'utf8'), '原文件')
+
+    const forced = await run(['video', '海浪', '--out', out, '--force'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(forced.code, 0)
+    assert.equal(fake.creations.length, 1)
+    assert.deepEqual(fs.readFileSync(out), fake.mp4)
   } finally {
     home.cleanup()
     cwd.cleanup()
@@ -151,6 +236,26 @@ test('等待超时：退出码 1，报错含 video_id 与 sgen status 恢复提�
     assert.match(r.stderr, /vid-1/)
     assert.match(r.stderr, /sgen status vid-1/)
     assert.equal(fs.readdirSync(cwd.dir).length, 0)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('--timeout 同时限制单次状态查询，不会被默认 HTTP 超时拖长', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeAgnesVideo(t, { completeAfterPolls: Infinity, pollDelayMs: 500 })
+    agnesConfig(home, `${fake.url}/v1`)
+    const startedAt = Date.now()
+    const r = await run(['video', '慢任务', '--timeout', '0.1'], {
+      env: { HOME: home.dir, SGEN_HTTP_TIMEOUT_MS: '5000' },
+      cwd: cwd.dir,
+    })
+    assert.equal(r.code, 1)
+    assert.match(r.stderr, /等待超时/)
+    assert.ok(Date.now() - startedAt < 1000, '总等待上限不应被单次 HTTP 超时突破')
   } finally {
     home.cleanup()
     cwd.cleanup()

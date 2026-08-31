@@ -17,6 +17,7 @@ export function parseArgs(argv, { flags = [], booleans = [], multi = [] } = {}) 
         key = key.slice(0, eq)
       }
       if (booleans.includes(key)) {
+        if (val !== undefined) throw usageErr(`--${key} 是开关参数，不接受值`)
         out.values[key] = true
         continue
       }

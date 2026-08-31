@@ -9,7 +9,7 @@ description: "本地生图/生视频命令行工具（商汤 SenseNova + Agnes �
 
 用户（或任务）需要**产出**图片/视频文件时。命令输出就是本地文件路径，拿到即可继续用（嵌入文档、预览、加工）。
 
-前置检查：`which sgen`。不存在则到 `~/Coding/imagegen` 运行 `npm link`；报缺 Key 则提示用户运行 `sgen config init`。
+前置检查：`which sgen`。不存在则到 `~/Coding/sgen` 运行 `npm link`；报缺 Key 则提示用户运行 `sgen config init`。
 
 ## 命令速查
 
@@ -24,18 +24,18 @@ sgen video "日落海滩航拍" --seconds 8
 sgen video "图片动起来" --first-frame a.png                 # 首帧生视频（可加 --last-frame 做首尾帧）
 sgen video "按 <Picture 1> 风格" --ref-image a.png --ref-audio s.mp3   # 参考素材（图≤5 张）
 sgen video "慢镜头" --model agnes-video-v2.0 --num-frames 241 --frame-rate 24  # ≈10 秒
-sgen video "长任务" --no-wait                                # 立即返回 video_id
+sgen video "长任务" --no-wait                                # 立即返回 video_id，并自动记住所用模型
 sgen status <video_id> --wait                                # 回来续等并自动下载
 ```
 
-通用：`--out <路径>` 指定输出；`--json` 结构化输出；`sgen models` 查全部模型与限制。
+通用：`--out <路径>` 指定输出；已有文件默认不覆盖，确认覆盖才加 `--force`；`--json` 成功和失败都输出结构化 JSON；`sgen models` 查全部模型与限制。
 退出码：0 成功 / 2 参数或配置错 / 1 API 或网络错。
 
 ## 模型限制速查（非法参数会被本地拦截并列出可选值）
 
 | 模型 | 用途 | 关键限制 | 价格 |
 |---|---|---|---|
-| `sensenova-u1.5-lite`（默认图） | 文/图生图 | 2K/4K 或 WxH（512–4096、32 倍数、≤3:1）；无 --ratio | 免费 |
+| `sensenova-u1.5-lite`（默认图） | 文/图生图 | 1K/2K/4K 或 WxH（512–4096、32 倍数、≤3:1）；--ratio 会在本地换算 | 免费 |
 | `sensenova-u1-fast` | 文生图 | 仅 1K/2K（4K 拒）；比例 16:9–9:21 共 10 档 | 免费 |
 | `agnes-image-2.1-flash` | 文/图生图 | 1K–4K + 8 档比例 | 限免 $0 |
 | `agnes-video-2.5-flash`（默认视频） | 文/首尾帧/参考生视频 | 仅 720P；4–12 秒；参考图≤5 | 限免 $0 |
@@ -47,6 +47,7 @@ sgen status <video_id> --wait                                # 回来续等并�
 - `未找到 API Key` → 让用户跑 `sgen config init`（支持多把 Key 自动轮换）
 - `HTTP 401/403` → Key 无效；Agnes 国际版/中国版 Key 目前通用，若持续失败可 `sgen config set agnes.region international|china` 换域名重试；`sgen config test` 逐把查
 - `全部 N 把 Key 均失败` → 免费额度撞限流，等窗口刷新或加 Key
+- `生成请求未自动重试` → 结果可能不确定，先去平台控制台查任务/额度，不要直接重复提交
 - `--xxx 不被支持` → 按报错里的可选值改参数，`sgen models` 查全量
 - 视频等待超时 → 用报错里的 `sgen status <id> --wait` 恢复，不要重新提交浪费额度
 - 商汤图片 URL 24 小时失效 → 工具已自动下载本地文件，用文件路径即可
@@ -54,6 +55,8 @@ sgen status <video_id> --wait                                # 回来续等并�
 ## 注意
 
 - 默认模型永远免费；唯一收费模型 `agnes-video-2.5` 必须显式 `--model` 点名且先打印预估费用。
+- 目录外模型无法判断价格，工具会先警告；不要把这类模型当成默认免费模型。
 - 参考图/音频/视频一律传**本地路径**（自动转 Base64），不要先上传图床。
 - 首尾帧（--first-frame/--last-frame）与参考素材（--ref-image/--ref-audio/--ref-video）互斥。
-- 详细参数与模型矩阵见 `~/Coding/imagegen/README.md`。
+- 创建视频任务后会立刻打印并保存 `video_id → model`；中断后直接用提示里的 status 命令恢复。
+- 详细参数与模型矩阵见 `~/Coding/sgen/README.md`。

@@ -8,7 +8,7 @@ const MP4_BYTES = Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0
 // rateLimitPolls：前 N 次查询返回 429（模拟状态查询独立限流）
 export async function fakeAgnesVideo(
   t,
-  { key = 'ak-test', completeAfterPolls = 2, failWith = null, rateLimitPolls = 0 } = {},
+  { key = 'ak-test', completeAfterPolls = 2, failWith = null, rateLimitPolls = 0, pollDelayMs = 0 } = {},
 ) {
   const creations = []
   const polls = []
@@ -41,6 +41,13 @@ export async function fakeAgnesVideo(
       return
     }
     if (req.method === 'GET' && req.url.startsWith('/agnesapi')) {
+      if (pollDelayMs) await new Promise((resolve) => setTimeout(resolve, pollDelayMs))
+      const presented = req.headers.authorization?.replace(/^Bearer /, '')
+      if (presented !== key) {
+        res.writeHead(401, { 'content-type': 'application/json' })
+        res.end(JSON.stringify({ error: { message: '未提供令牌' } }))
+        return
+      }
       const u = new URL(req.url, 'http://localhost')
       const videoId = u.searchParams.get('video_id')
       const modelName = u.searchParams.get('model_name')

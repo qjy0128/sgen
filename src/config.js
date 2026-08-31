@@ -1,12 +1,12 @@
-import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { usageErr } from './errors.js'
 import { PROVIDERS } from './catalog.js'
+import { readJsonFile, writeJsonFile } from './json-store.js'
 
 export const DEFAULT_BASE_URLS = {
-  sensenova: 'https://token.sensenova.cn/v1',
-  agnes: 'https://apihub.agnes-ai.com/v1',
+  sensenova: PROVIDERS.sensenova.base_url,
+  agnes: PROVIDERS.agnes.base_url,
 }
 
 // 各供应商 Key 对应的环境变量名（兜底单 Key；报错提示也用同一份）
@@ -21,7 +21,7 @@ export const AGNES_CHINA_HINT =
 
 // Agnes 双区：国际版与中国版接口域名不同（Key 目前通用，官方未承诺长期保持）
 export const AGNES_REGIONS = {
-  international: 'https://apihub.agnes-ai.com/v1',
+  international: DEFAULT_BASE_URLS.agnes,
   china: 'https://api.agnes-ai.cn/v1',
 }
 
@@ -30,16 +30,11 @@ export function configPath() {
 }
 
 export function readRawConfig() {
-  try {
-    return JSON.parse(fs.readFileSync(configPath(), 'utf8'))
-  } catch {
-    return {}
-  }
+  return readJsonFile(configPath(), {})
 }
 
 export function saveRawConfig(config) {
-  fs.mkdirSync(path.dirname(configPath()), { recursive: true })
-  fs.writeFileSync(configPath(), JSON.stringify(config, null, 2) + '\n')
+  writeJsonFile(configPath(), config)
 }
 
 // 配置来源：~/.sgen/config.json 优先，环境变量作为单 Key 兜底
@@ -60,11 +55,11 @@ export function loadConfig() {
   return {
     sensenova: {
       api_keys: keys.filter(Boolean),
-      base_url: sn.base_url ?? DEFAULT_BASE_URLS.sensenova,
+      base_url: (sn.base_url ?? DEFAULT_BASE_URLS.sensenova).replace(/\/+$/, ''),
     },
     agnes: {
       api_keys: agnesKeys.filter(Boolean),
-      base_url: ag.base_url ?? AGNES_REGIONS[region],
+      base_url: (ag.base_url ?? AGNES_REGIONS[region]).replace(/\/+$/, ''),
       region,
     },
   }

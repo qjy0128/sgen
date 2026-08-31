@@ -1,9 +1,8 @@
 import { spawn } from 'node:child_process'
 import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { readRawConfig } from './config.js'
+import { statePath, readState, updateState } from './state.js'
 
 // 默认检查 main 分支的 package.json（公开仓库无需认证）；测试用 SGEN_UPDATE_CHECK_URL 覆写
 export const DEFAULT_CHECK_URL = 'https://raw.githubusercontent.com/qjy0128/sgen/main/package.json'
@@ -15,26 +14,7 @@ export function localVersion() {
   return JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version
 }
 
-export function statePath() {
-  return path.join(os.homedir(), '.sgen', 'state.json')
-}
-
-export function readState() {
-  try {
-    return JSON.parse(fs.readFileSync(statePath(), 'utf8'))
-  } catch {
-    return {}
-  }
-}
-
-export function writeState(state) {
-  try {
-    fs.mkdirSync(path.dirname(statePath()), { recursive: true })
-    fs.writeFileSync(statePath(), JSON.stringify(state, null, 2) + '\n')
-  } catch {
-    // 状态写失败不影响命令本身
-  }
-}
+export { statePath, readState }
 
 // x.y.z 数字段逐段比较：a > b 返回正数，相等返回 0（零依赖，不引 semver 包）
 export function compareVersions(a, b) {
@@ -57,6 +37,8 @@ export function updateCheckDisabled() {
 export function startUpdateCheck() {
   if (updateCheckDisabled()) return
   try {
+    const state = readState()
+    if (Date.now() - (state.checkedAt ?? 0) < CHECK_INTERVAL_MS) return
     const child = spawn(
       process.execPath,
       [fileURLToPath(new URL('./update-check.js', import.meta.url))],
@@ -81,7 +63,7 @@ export function notifyUpdate() {
     const n = state.notified
     if (n && n.version === remoteVersion && Date.now() - n.at < CHECK_INTERVAL_MS) return
     console.error(`sgen 有新版本 v${remoteVersion}（当前 v${local}），到仓库目录运行 git pull 更新。`)
-    writeState({ ...state, notified: { version: remoteVersion, at: Date.now() } })
+    updateState((current) => ({ ...current, notified: { version: remoteVersion, at: Date.now() } }))
   } catch {
     // 提示失败不影响命令结果
   }

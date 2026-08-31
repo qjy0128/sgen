@@ -53,7 +53,7 @@ test('文生图成功：调商汤接口（无水印）并下载到当前目录�
 
     const files = fs.readdirSync(cwd.dir)
     assert.equal(files.length, 1)
-    assert.match(files[0], /^sgen-\d{8}-\d{6}-\d+\.png$/)
+    assert.match(files[0], /^sgen-\d{8}-\d{9}-[a-f0-9]{8}\.png$/)
     assert.deepEqual(fs.readFileSync(path.join(cwd.dir, files[0])), PNG_BYTES)
     assert.ok(r.stdout.includes(files[0]), `stdout 应包含文件名：${r.stdout}`)
 
@@ -145,6 +145,51 @@ test('--out 指定确切文件路径时按该路径保存', async (t) => {
   }
 })
 
+test('--out 已存在时默认拒绝且不发生成请求；--force 才覆盖', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeSensenova(t)
+    writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
+    const out = path.join(cwd.dir, 'result.png')
+    fs.writeFileSync(out, '原文件')
+
+    const rejected = await run(['image', '一只猫', '--out', out], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(rejected.code, 2)
+    assert.match(rejected.stderr, /--force/)
+    assert.equal(fake.calls.length, 0, '输出路径不安全时不得先消耗生成额度')
+    assert.equal(fs.readFileSync(out, 'utf8'), '原文件')
+
+    const forced = await run(['image', '一只猫', '--out', out, '--force'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(forced.code, 0)
+    assert.equal(fake.calls.length, 1)
+    assert.deepEqual(fs.readFileSync(out), PNG_BYTES)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('--json 失败时 stdout 也是结构化 JSON', async () => {
+  const home = tmpDir('sgen-home-')
+  try {
+    const r = await run(['image', '--json'], { env: { HOME: home.dir } })
+    assert.equal(r.code, 2)
+    const json = JSON.parse(r.stdout)
+    assert.equal(json.ok, false)
+    assert.equal(json.error.kind, 'usage')
+    assert.match(json.error.message, /缺少/)
+  } finally {
+    home.cleanup()
+  }
+})
+
 test('--out 指向目录（尾斜杠）时在目录内自动命名', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
@@ -158,7 +203,7 @@ test('--out 指向目录（尾斜杠）时在目录内自动命名', async (t) =
     assert.equal(r.code, 0)
     const files = fs.readdirSync(sub)
     assert.equal(files.length, 1)
-    assert.match(files[0], /^sgen-\d{8}-\d{6}-\d+\.png$/)
+    assert.match(files[0], /^sgen-\d{8}-\d{9}-[a-f0-9]{8}\.png$/)
   } finally {
     home.cleanup()
     cwd.cleanup()
