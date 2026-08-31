@@ -102,6 +102,16 @@ const SETTABLE = {
     desc: '进阶：覆写 Agnes 接口地址',
     example: 'sgen config set agnes.base_url https://apihub.agnes-ai.com/v1',
   },
+  update_check: {
+    parse: (v) => {
+      if (v !== 'true' && v !== 'false') {
+        throw usageErr('update_check 可选值：true（默认，每天检查一次新版本）/ false（禁用）')
+      }
+      return v === 'true'
+    },
+    desc: '自动更新检查：true（默认）/ false（禁用；也可用 SGEN_NO_UPDATE_CHECK=1 临时禁用）',
+    example: 'sgen config set update_check false',
+  },
 }
 
 function renderSettable() {
@@ -121,10 +131,15 @@ async function configSet(keyPath, value) {
   const parsed = item.parse(value)
 
   const raw = readRawConfig()
-  const providers = raw.providers ?? {}
   const [providerId, field] = keyPath.split('.')
-  providers[providerId] = { ...(providers[providerId] ?? {}), [field]: parsed }
-  saveRawConfig({ ...raw, providers })
+  if (field === undefined) {
+    // 顶层配置项（如 update_check），不属于任何供应商
+    saveRawConfig({ ...raw, [keyPath]: parsed })
+  } else {
+    const providers = raw.providers ?? {}
+    providers[providerId] = { ...(providers[providerId] ?? {}), [field]: parsed }
+    saveRawConfig({ ...raw, providers })
+  }
 
   console.log(`已设置 ${keyPath}`)
   if (keyPath === 'agnes.region' && parsed === 'china') console.error(AGNES_CHINA_HINT)
@@ -145,6 +160,7 @@ function configList() {
   lines.push(
     `环境变量兜底：SENSENOVA_API_KEY ${process.env.SENSENOVA_API_KEY ? '已设置' : '未设置'}；AGNES_API_KEY ${process.env.AGNES_API_KEY ? '已设置' : '未设置'}`,
   )
+  lines.push(`更新检查：${readRawConfig().update_check === false ? '关闭（update_check=false）' : '开启（每天一次，仅提示）'}`)
   console.log(lines.join('\n'))
   return 0
 }

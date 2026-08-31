@@ -10,6 +10,7 @@ import { callWithKeyPool } from './keys.js'
 import { configCmd } from './config-cmd.js'
 import { videoCmd, statusCmd } from './video-cmd.js'
 import { parseArgs } from './args.js'
+import { startUpdateCheck, notifyUpdate } from './update.js'
 
 const USAGE = `用法：sgen <命令> [参数]
 
@@ -126,7 +127,7 @@ async function imageCmd(argv) {
   return 0
 }
 
-export async function main(argv) {
+async function runCommand(argv) {
   const [cmd, ...rest] = argv
   try {
     if (!cmd || cmd === '-h' || cmd === '--help') {
@@ -145,5 +146,14 @@ export async function main(argv) {
   } catch (err) {
     console.error(err.message || String(err))
     return err.kind === 'usage' ? 2 : 1
+  }
+}
+
+export async function main(argv) {
+  startUpdateCheck()
+  try {
+    return await runCommand(argv)
+  } finally {
+    notifyUpdate()
   }
 }

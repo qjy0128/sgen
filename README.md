@@ -18,6 +18,19 @@ npm link          # 全局安装 sgen 命令
 sgen --help       # 打印用法说明即安装成功
 ```
 
+### 更新
+
+工具每天后台检查一次 GitHub main 分支上的新版本（比较 `package.json` 版本号，只读 HTTPS 请求，不碰你的 `.git`）；发现新版本时只在 stderr 提示一行，由你手动到仓库目录 `git pull` 更新——工具绝不自动修改你的代码。
+
+禁用检查（任一即可）：
+
+- 临时：`SGEN_NO_UPDATE_CHECK=1 sgen ...`
+- 持久：`sgen config set update_check false`
+- CI 环境（`CI` 为真值）自动跳过
+
+检查状态存在 `~/.sgen/state.json`，与配置文件互不影响。
+
+
 ## 获取 API Key（两家平台，约 5 分钟）
 
 ### 1. 商汤日日新 SenseNova（免费）
