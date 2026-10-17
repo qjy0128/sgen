@@ -1,6 +1,6 @@
 // 模型目录：全部能力/限制数据驱动，新模型只需在此加一条记录
 // size 语义：tiers=档位常量；wxh=true 允许精确像素（不本地校验）；wxh 为对象则按规则校验；wxh=null 不支持精确像素
-// pixels：档位+比例 → 服务端实际要求的精确像素（仅商汤 u1-fast 需要）
+// pixels：档位+比例 → 服务端实际要求的精确像素（仅商汤 u1.5-fast 需要）
 // ratios：支持 --ratio 的模型列出可选值；null 表示不支持该参数
 
 export const PROVIDERS = {
@@ -32,7 +32,7 @@ export const MODELS = [
     note: '公测免费 1500 次/5 小时；结果 URL 24 小时失效，工具已自动下载',
   },
   {
-    id: 'sensenova-u1-fast',
+    id: 'sensenova-u1.5-fast',
     provider: 'sensenova',
     type: 'image',
     free: true,
@@ -161,6 +161,18 @@ export function findModel(id) {
   return MODELS.find((m) => m.id === id) ?? null
 }
 
+// 已被平台改名的旧模型名：上游把 sensenova-u1-fast 换成了 sensenova-u1.5-fast，
+// 旧名直连 API 会 404（model is not found）。这里保留映射，老脚本/老习惯仍可用。
+export const MODEL_ALIASES = {
+  'sensenova-u1-fast': 'sensenova-u1.5-fast',
+}
+
+// 返回 { id, deprecatedFrom }：deprecatedFrom 非空表示这是旧名，调用方应提示迁移
+export function resolveModelId(id) {
+  const target = MODEL_ALIASES[id]
+  return target ? { id: target, deprecatedFrom: id } : { id, deprecatedFrom: null }
+}
+
 export function assertCatalog() {
   const errors = []
   const ids = new Set()
@@ -174,6 +186,10 @@ export function assertCatalog() {
     }
     if (model.type === 'video' && !model.request?.family) errors.push(`${model.id} 缺少视频请求族`)
     if (!model.free && !model.pricing) errors.push(`${model.id} 是收费模型但缺少 pricing`)
+  }
+  for (const [alias, target] of Object.entries(MODEL_ALIASES)) {
+    if (!ids.has(target)) errors.push(`别名 ${alias} 指向不存在的模型：${target}`)
+    if (ids.has(alias)) errors.push(`别名 ${alias} 与目录内模型重名`)
   }
   for (const [id, type] of [
     [DEFAULT_IMAGE_MODEL, 'image'],
