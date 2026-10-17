@@ -35,12 +35,12 @@ async function assertRejected(t, args, stderrPattern) {
   }
 }
 
-test('u1-fast 传 4K：本地拦截并列出 1K/2K', async (t) => {
-  await assertRejected(t, ['--model', 'sensenova-u1-fast', '--size', '4K'], /1K、2K/)
+test('u1.5-fast 传 4K：本地拦截并列出 1K/2K', async (t) => {
+  await assertRejected(t, ['--model', 'sensenova-u1.5-fast', '--size', '4K'], /1K、2K/)
 })
 
-test('u1-fast 传精确像素：本地拦截（仅支持档位）', async (t) => {
-  await assertRejected(t, ['--model', 'sensenova-u1-fast', '--size', '1024x1024'], /1K、2K/)
+test('u1.5-fast 传精确像素：本地拦截（仅支持档位）', async (t) => {
+  await assertRejected(t, ['--model', 'sensenova-u1.5-fast', '--size', '1024x1024'], /1K、2K/)
 })
 
 test('u1.5-lite 传非 32 倍数宽高：本地拦截并提示 32 的倍数', async (t) => {
@@ -87,7 +87,7 @@ test('image 选视频模型：本地拦截并提示用 sgen video', async (t) =>
   await assertRejected(t, ['--model', 'agnes-video-2.5-flash'], /sgen video/)
 })
 
-test('u1-fast 档位+比例换算为精确像素（1K 16:9 → 1792x992）', async (t) => {
+test('u1.5-fast 档位+比例换算为精确像素（1K 16:9 → 1792x992）', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -95,11 +95,11 @@ test('u1-fast 档位+比例换算为精确像素（1K 16:9 → 1792x992）', asy
     writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
 
     const r = await run(
-      ['image', '一只猫', '--model', 'sensenova-u1-fast', '--size', '1K', '--ratio', '16:9'],
+      ['image', '一只猫', '--model', 'sensenova-u1.5-fast', '--size', '1K', '--ratio', '16:9'],
       { env: { HOME: home.dir }, cwd: cwd.dir },
     )
     assert.equal(r.code, 0)
-    assert.equal(fake.calls[0].body.model, 'sensenova-u1-fast')
+    assert.equal(fake.calls[0].body.model, 'sensenova-u1.5-fast')
     assert.equal(fake.calls[0].body.size, '1792x992')
   } finally {
     home.cleanup()
@@ -107,7 +107,7 @@ test('u1-fast 档位+比例换算为精确像素（1K 16:9 → 1792x992）', asy
   }
 })
 
-test('u1-fast 不传 size 默认 1K 1:1 → 1344x1344', async (t) => {
+test('旧模型名 sensenova-u1-fast 自动改名为 sensenova-u1.5-fast 并提示迁移', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -119,6 +119,26 @@ test('u1-fast 不传 size 默认 1K 1:1 → 1344x1344', async (t) => {
       cwd: cwd.dir,
     })
     assert.equal(r.code, 0)
+    assert.equal(fake.calls[0].body.model, 'sensenova-u1.5-fast')
+    assert.match(r.stderr, /sensenova-u1-fast 已被平台改名为 sensenova-u1\.5-fast/)
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
+test('u1.5-fast 不传 size 默认 1K 1:1 → 1344x1344', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeSensenova(t)
+    writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
+
+    const r = await run(['image', '一只猫', '--model', 'sensenova-u1.5-fast'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(r.code, 0)
     assert.equal(fake.calls[0].body.size, '1344x1344')
   } finally {
     home.cleanup()
@@ -126,7 +146,7 @@ test('u1-fast 不传 size 默认 1K 1:1 → 1344x1344', async (t) => {
   }
 })
 
-test('u1-fast 2K 9:21 → 1344x3136；非法比例被拦截并列出 10 档', async (t) => {
+test('u1.5-fast 2K 9:21 → 1344x3136；非法比例被拦截并列出 10 档', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -134,14 +154,14 @@ test('u1-fast 2K 9:21 → 1344x3136；非法比例被拦截并列出 10 档', as
     writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
 
     const ok = await run(
-      ['image', '一只猫', '--model', 'sensenova-u1-fast', '--size', '2K', '--ratio', '9:21'],
+      ['image', '一只猫', '--model', 'sensenova-u1.5-fast', '--size', '2K', '--ratio', '9:21'],
       { env: { HOME: home.dir }, cwd: cwd.dir },
     )
     assert.equal(ok.code, 0)
     assert.equal(fake.calls[0].body.size, '1344x3136')
 
     const bad = await run(
-      ['image', '一只猫', '--model', 'sensenova-u1-fast', '--ratio', '5:5'],
+      ['image', '一只猫', '--model', 'sensenova-u1.5-fast', '--ratio', '5:5'],
       { env: { HOME: home.dir }, cwd: cwd.dir },
     )
     assert.equal(bad.code, 2)

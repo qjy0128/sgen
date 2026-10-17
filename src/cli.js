@@ -3,7 +3,7 @@ import { generateImage as sensenovaGenerate } from './sensenova.js'
 import { generateImage as agnesGenerate } from './agnes.js'
 import { prepareOutPath, downloadTo } from './save.js'
 import { usageErr } from './errors.js'
-import { renderModels, findModel, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
+import { renderModels, findModel, resolveModelId, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
 import { validateImageParams } from './validate.js'
 import { imageToDataUri } from './media.js'
 import { callWithKeyPool } from './keys.js'
@@ -73,7 +73,11 @@ async function imageCmd(argv) {
     throw usageErr(`多余参数：${args.positionals.slice(1).join(' ')}（包含空格的提示词请用引号包住）`)
   }
 
-  const modelId = args.values.model ?? DEFAULT_IMAGE_MODEL
+  const requestedModel = args.values.model ?? DEFAULT_IMAGE_MODEL
+  const { id: modelId, deprecatedFrom } = resolveModelId(requestedModel)
+  if (deprecatedFrom) {
+    console.error(`⚠ ${deprecatedFrom} 已被平台改名为 ${modelId}，已自动改用新名。`)
+  }
   const rec = findModel(modelId)
   let size = args.values.size
 

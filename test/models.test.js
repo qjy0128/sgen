@@ -4,7 +4,7 @@ import { run } from './helpers/run.js'
 
 const ALL_MODELS = [
   'sensenova-u1.5-lite',
-  'sensenova-u1-fast',
+  'sensenova-u1.5-fast',
   'agnes-image-2.1-flash',
   'agnes-image-2.0-flash',
   'agnes-video-v2.0',

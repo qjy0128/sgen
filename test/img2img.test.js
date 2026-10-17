@@ -89,7 +89,7 @@ test('--image 文件不存在：本地拦截，人话报错', async (t) => {
   }
 })
 
-test('不支持图生图的模型（u1-fast）传 --image：本地拦截', async (t) => {
+test('不支持图生图的模型（u1.5-fast）传 --image：本地拦截', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')
   try {
@@ -97,7 +97,7 @@ test('不支持图生图的模型（u1-fast）传 --image：本地拦截', async
     const fake = await fakeSensenova(t)
     writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
 
-    const r = await run(['image', '一只猫', '--model', 'sensenova-u1-fast', '--image', ref], {
+    const r = await run(['image', '一只猫', '--model', 'sensenova-u1.5-fast', '--image', ref], {
       env: { HOME: home.dir },
       cwd: cwd.dir,
     })
@@ -117,7 +117,7 @@ test('不支持图生图的模型 + 不存在的参考图：先报能力不支�
     const fake = await fakeSensenova(t)
     writeConfig(home.dir, { sensenova: { api_keys: ['sk-test'], base_url: `${fake.url}/v1` } })
 
-    const r = await run(['image', '一只猫', '--model', 'sensenova-u1-fast', '--image', '/nonexistent/ref.png'], {
+    const r = await run(['image', '一只猫', '--model', 'sensenova-u1.5-fast', '--image', '/nonexistent/ref.png'], {
       env: { HOME: home.dir },
       cwd: cwd.dir,
     })
