@@ -29,9 +29,7 @@ function mediaSetup(t, home) {
   fs.writeFileSync(b, png)
   const mp3 = path.join(cwd.dir, 's.mp3')
   fs.writeFileSync(mp3, Buffer.from([0x49, 0x44, 0x33, 1, 2, 3]))
-  const mp4 = path.join(cwd.dir, 'v.mp4')
-  fs.writeFileSync(mp4, Buffer.from([0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70]))
-  return { cwd, png, a, b, mp3, mp4 }
+  return { cwd, png, a, b, mp3 }
 }
 
 test('keyframe 首尾帧：first_frame/last_frame 为 Data URI，mode=keyframe', async (t) => {
@@ -141,16 +139,18 @@ test('2.5-flash 参考图超过 5 张：本地拦截（零创建）', async (t) 
   }
 })
 
-test('2.5-flash 不支持参考视频：本地拦截并说明仅 2.5 支持', async (t) => {
+test('已移除的参考视频与帧控制参数：本地拦截（零创建）', async (t) => {
   const home = tmpDir('sgen-home-')
-  const { cwd, mp4 } = mediaSetup(t, home)
+  const { cwd } = mediaSetup(t, home)
   try {
-    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
+    const fake = await fakeAgnesVideo(t)
     agnesConfig(home, `${fake.url}/v1`)
 
-    const r = await run(['video', '一只猫', '--ref-video', mp4], { env: { HOME: home.dir }, cwd: cwd.dir })
-    assert.equal(r.code, 2)
-    assert.match(r.stderr, /agnes-video-2\.5/)
+    for (const option of ['--ref-video', '--video-start', '--num-frames', '--frame-rate']) {
+      const r = await run(['video', '一只猫', option, '1'], { env: { HOME: home.dir }, cwd: cwd.dir })
+      assert.equal(r.code, 2)
+      assert.match(r.stderr, new RegExp(`未知参数 ${option}`))
+    }
     assert.equal(fake.creations.length, 0)
   } finally {
     home.cleanup()
@@ -178,58 +178,20 @@ test('keyframe 与参考素材互斥：本地拦截', async (t) => {
   }
 })
 
-test('收费模型 2.5：显式点名可用，参考视频（含起始秒）到达，运行前打印预估费用', async (t) => {
+test('退役与收费视频模型在本地拦截（零创建）', async (t) => {
   const home = tmpDir('sgen-home-')
-  const { cwd, mp4 } = mediaSetup(t, home)
-  try {
-    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
-    agnesConfig(home, `${fake.url}/v1`)
-
-    const r = await run(
-      [
-        'video',
-        '续写这个镜头',
-        '--model',
-        'agnes-video-2.5',
-        '--ref-video',
-        mp4,
-        '--video-start',
-        '2',
-        '--size',
-        '2K',
-      ],
-      { env: { HOME: home.dir }, cwd: cwd.dir },
-    )
-    assert.equal(r.code, 0)
-    assert.match(r.stderr, /预估费用/)
-    assert.match(r.stderr, /0\.275/)
-    const body = fake.creations[0].body
-    assert.equal(body.mode, 'reference')
-    assert.equal(body.size, '2K')
-    assert.equal(body.videos.length, 1)
-    assert.equal(body.videos[0].start_seconds, 2)
-    assert.ok(body.videos[0].url.startsWith('data:video/mp4;base64,'))
-  } finally {
-    home.cleanup()
-    cwd.cleanup()
-  }
-})
-
-test('--video-start 必须配参考视频，且只能是非负数', async (t) => {
-  const home = tmpDir('sgen-home-')
-  const { cwd, mp4 } = mediaSetup(t, home)
+  const { cwd } = mediaSetup(t, home)
   try {
     const fake = await fakeAgnesVideo(t)
     agnesConfig(home, `${fake.url}/v1`)
-    const base = ['video', '续写', '--model', 'agnes-video-2.5']
-    for (const args of [
-      [...base, '--video-start', '2'],
-      [...base, '--ref-video', mp4, '--video-start', '-1'],
-      [...base, '--ref-video', mp4, '--video-start', 'abc'],
+
+    for (const [model, pattern] of [
+      ['agnes-video-v2.0', /退役/],
+      ['agnes-video-2.5', /收费模型/],
     ]) {
-      const r = await run(args, { env: { HOME: home.dir }, cwd: cwd.dir })
+      const r = await run(['video', '一只猫', '--model', model], { env: { HOME: home.dir }, cwd: cwd.dir })
       assert.equal(r.code, 2)
-      assert.match(r.stderr, /--video-start/)
+      assert.match(r.stderr, pattern)
     }
     assert.equal(fake.creations.length, 0)
   } finally {
@@ -254,90 +216,6 @@ test('未知 Agnes 视频模型会透传 seconds、size、ratio，不静默丢�
     assert.equal(body.seconds, '7')
     assert.equal(body.size, '1080P')
     assert.equal(body.aspect_ratio, '16:9')
-  } finally {
-    home.cleanup()
-    cwd.cleanup()
-  }
-})
-
-test('v2.0：ti2vid 模式，帧数/帧率/分辨率→宽高 正确到达', async (t) => {
-  const home = tmpDir('sgen-home-')
-  const { cwd } = mediaSetup(t, home)
-  try {
-    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
-    agnesConfig(home, `${fake.url}/v1`)
-
-    const r = await run(
-      [
-        'video',
-        '一只猫在跑',
-        '--model',
-        'agnes-video-v2.0',
-        '--num-frames',
-        '121',
-        '--frame-rate',
-        '24',
-        '--size',
-        '720p',
-        '--ratio',
-        '9:16',
-      ],
-      { env: { HOME: home.dir }, cwd: cwd.dir },
-    )
-    assert.equal(r.code, 0)
-    const body = fake.creations[0].body
-    assert.equal(body.mode, 'ti2vid')
-    assert.equal(body.num_frames, 121)
-    assert.equal(body.frame_rate, 24)
-    assert.equal(body.width, 720)
-    assert.equal(body.height, 1280)
-  } finally {
-    home.cleanup()
-    cwd.cleanup()
-  }
-})
-
-test('v2.0 首尾帧：keyframes 模式（extra_body 嵌套）', async (t) => {
-  const home = tmpDir('sgen-home-')
-  const { cwd, a, b } = mediaSetup(t, home)
-  try {
-    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
-    agnesConfig(home, `${fake.url}/v1`)
-
-    const r = await run(
-      ['video', '转场动画', '--model', 'agnes-video-v2.0', '--first-frame', a, '--last-frame', b],
-      { env: { HOME: home.dir }, cwd: cwd.dir },
-    )
-    assert.equal(r.code, 0)
-    const body = fake.creations[0].body
-    assert.equal(body.mode, undefined)
-    assert.equal(body.extra_body.mode, 'keyframes')
-    assert.equal(body.extra_body.image.length, 2)
-  } finally {
-    home.cleanup()
-    cwd.cleanup()
-  }
-})
-
-test('v2.0 参数非法：帧数超限/不满足 8n+1、帧率越界、seconds 不适用', async (t) => {
-  const home = tmpDir('sgen-home-')
-  const { cwd } = mediaSetup(t, home)
-  try {
-    const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
-    agnesConfig(home, `${fake.url}/v1`)
-    const base = ['video', '一只猫', '--model', 'agnes-video-v2.0']
-
-    for (const [args, pattern] of [
-      [['--num-frames', '442'], /441/],
-      [['--num-frames', '120'], /8n\+1/],
-      [['--frame-rate', '61'], /1–60/],
-      [['--seconds', '5'], /--num-frames/],
-    ]) {
-      const r = await run([...base, ...args], { env: { HOME: home.dir }, cwd: cwd.dir })
-      assert.equal(r.code, 2, `参数 ${args} 应被拦截`)
-      assert.match(r.stderr, pattern)
-    }
-    assert.equal(fake.creations.length, 0)
   } finally {
     home.cleanup()
     cwd.cleanup()

@@ -60,7 +60,7 @@
 - 生图：`sgen image "提示词" [--size 2K] [--ratio 16:9] [--image 参考图...] [--model 模型名] [--json]`
 - 生视频：`sgen video "提示词" [--seconds 5] [--first-frame 图] [--last-frame 图] [--ref-image 图] [--ref-audio 音频] [--no-wait]`
 - 查询/续等视频任务：`sgen status <video_id> --wait`（本机自动找回模型）；查模型与限制：`sgen models`
-- 默认模型免费；唯一收费模型 agnes-video-2.5 必须显式 `--model` 点名且先出预估费用
+- 内置模型全部当前免费；已退役的 agnes-video-v2.0 与收费的 agnes-video-2.5 会在本地拦截
 - 参考素材传本地路径；已有输出默认不覆盖，确认后才用 `--force`；`--json` 的成功与失败都从 stdout 读取；退出码 0 成功 / 2 用法错 / 1 API 错
 - 生成请求网络中断时不会自动重试，先去平台控制台检查，避免重复生成或扣费
 - 详细用法：`sgen --help` 或 ~/.agents/skills/sgen/SKILL.md
@@ -69,7 +69,7 @@
 ### WorkBuddy（腾讯）
 桌面办公 Agent，技能经界面/技能市场管理，无本地文件约定（编程场景走同门 CodeBuddy：其 CLI 读 `~/.codebuddy/CODEBUDDY.md` 与 `~/.codebuddy/skills/`，格式兼容，照 Qoder 的方式软链即可）。**对 WorkBuddy 本体，在对话里粘贴这段教它**：
 
-> 我电脑上装了生图/生视频命令行工具 sgen。以后我让你生成图片/视频时，直接运行终端命令：生图 `sgen image "提示词" --size 2K`；改图 `sgen image "要求" --image 图片路径`；生视频 `sgen video "提示词" --seconds 5`；视频没等完就续等 `sgen status <video_id> --wait`。命令成功后输出里会有生成的本地文件路径。查可用模型跑 `sgen models`。默认模型免费；`--model agnes-video-2.5` 是收费的，除非我明确要求否则不要用。
+> 我电脑上装了生图/生视频命令行工具 sgen。以后我让你生成图片/视频时，直接运行终端命令：生图 `sgen image "提示词" --size 2K`；改图 `sgen image "要求" --image 图片路径`；生视频 `sgen video "提示词" --seconds 5`；视频没等完就续等 `sgen status <video_id> --wait`。命令成功后输出里会有生成的本地文件路径。查可用模型跑 `sgen models`。内置模型全部当前免费；退役或收费模型会被本地拦截，不要改用目录外模型绕过。
 
 ### Antigravity（Google）
 全局规则 `~/.gemini/GEMINI.md`（已写入）；全局技能 `~/.gemini/config/skills/`（已软链）；项目级用 `.agents/rules/` 与根目录 `GEMINI.md`/`AGENTS.md`。若开启终端沙箱（`enableTerminalSandbox`），需放行前述域名。

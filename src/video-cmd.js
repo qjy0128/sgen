@@ -22,21 +22,9 @@ function parseTimeoutMs(value) {
 }
 
 const VIDEO_FLAGS = {
-  flags: [
-    'model',
-    'seconds',
-    'size',
-    'ratio',
-    'timeout',
-    'out',
-    'first-frame',
-    'last-frame',
-    'num-frames',
-    'frame-rate',
-    'video-start',
-  ],
+  flags: ['model', 'seconds', 'size', 'ratio', 'timeout', 'out', 'first-frame', 'last-frame'],
   booleans: ['json', 'no-wait', 'force'],
-  multi: ['ref-image', 'ref-audio', 'ref-video'],
+  multi: ['ref-image', 'ref-audio'],
 }
 
 function recoveryCommand(videoId, model) {
@@ -105,7 +93,7 @@ export async function videoCmd(argv) {
   const prompt = requireSinglePositional(args.positionals, '提示词')
   const values = args.values
   const modelId = values.model ?? DEFAULT_VIDEO_MODEL
-  const plan = buildVideoPlan({ modelId, prompt, values, explicitlySelected: values.model !== undefined })
+  const plan = buildVideoPlan({ modelId, prompt, values })
   if (plan.providerId !== 'agnes') {
     throw usageErr('商汤没有开放视频 API，sgen video 仅支持 Agnes 视频模型（sgen models 查看）')
   }

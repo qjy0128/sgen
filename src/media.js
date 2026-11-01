@@ -20,12 +20,6 @@ const AUDIO_MIME = {
   '.flac': 'audio/flac',
 }
 
-const VIDEO_MIME = {
-  '.mp4': 'video/mp4',
-  '.mov': 'video/quicktime',
-  '.webm': 'video/webm',
-}
-
 function toDataUri(filePath, mimeMap, what) {
   if (!fs.existsSync(filePath)) {
     throw usageErr(`${what}文件不存在：${filePath}`)
@@ -55,4 +49,3 @@ function toDataUri(filePath, mimeMap, what) {
 // 本地媒体 → Data URI（参考素材统一走 Base64，无需图床/对象存储）
 export const imageToDataUri = (filePath) => toDataUri(filePath, IMAGE_MIME, '图片')
 export const audioToDataUri = (filePath) => toDataUri(filePath, AUDIO_MIME, '音频')
-export const videoToDataUri = (filePath) => toDataUri(filePath, VIDEO_MIME, '视频')

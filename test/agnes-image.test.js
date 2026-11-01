@@ -30,7 +30,7 @@ test('Agnes 文生图成功：鉴权、size/ratio 参数映射、结果自动下
     })
 
     const r = await run(
-      ['image', '一只猫', '--model', 'agnes-image-2.1-flash', '--size', '2K', '--ratio', '16:9'],
+      ['image', '一只猫', '--model', 'agnes-image-2.5-flash', '--size', '2K', '--ratio', '16:9'],
       { env: { HOME: home.dir }, cwd: cwd.dir },
     )
     assert.equal(r.code, 0)
@@ -42,7 +42,7 @@ test('Agnes 文生图成功：鉴权、size/ratio 参数映射、结果自动下
 
     assert.equal(agnes.calls.length, 1)
     assert.equal(agnes.calls[0].auth, 'Bearer ak-test')
-    assert.equal(agnes.calls[0].body.model, 'agnes-image-2.1-flash')
+    assert.equal(agnes.calls[0].body.model, 'agnes-image-2.5-flash')
     assert.equal(agnes.calls[0].body.prompt, '一只猫')
     assert.equal(agnes.calls[0].body.size, '2K')
     assert.equal(agnes.calls[0].body.ratio, '16:9')
@@ -59,7 +59,7 @@ test('Agnes 文生图成功：鉴权、size/ratio 参数映射、结果自动下
 test('缺 Agnes Key：退出码 2，提示 AGNES_API_KEY 与 sgen config init', async () => {
   const home = tmpDir('sgen-home-')
   try {
-    const r = await run(['image', '一只猫', '--model', 'agnes-image-2.1-flash'], { env: { HOME: home.dir } })
+    const r = await run(['image', '一只猫', '--model', 'agnes-image-2.5-flash'], { env: { HOME: home.dir } })
     assert.equal(r.code, 2)
     assert.match(r.stderr, /AGNES_API_KEY/)
     assert.match(r.stderr, /sgen config init/)
@@ -75,7 +75,7 @@ test('Agnes Key 无效（HTTP 401）：退出码 1，错误信息含 Agnes 与�
     const agnes = await fakeAgnes(t)
     writeConfig(home.dir, { agnes: { api_keys: ['ak-wrong'], base_url: `${agnes.url}/v1` } })
 
-    const r = await run(['image', '一只猫', '--model', 'agnes-image-2.1-flash'], {
+    const r = await run(['image', '一只猫', '--model', 'agnes-image-2.5-flash'], {
       env: { HOME: home.dir },
       cwd: cwd.dir,
     })
@@ -139,7 +139,7 @@ test('Agnes 图生图（多图）：--image 两张 → extra_body.image 数组�
     writeConfig(home.dir, { agnes: { api_keys: ['ak-test'], base_url: `${agnes.url}/v1` } })
 
     const r = await run(
-      ['image', '把两张图合成', '--model', 'agnes-image-2.1-flash', '--image', ref1, '--image', ref2],
+      ['image', '把两张图合成', '--model', 'agnes-image-2.5-flash', '--image', ref1, '--image', ref2],
       { env: { HOME: home.dir }, cwd: cwd.dir },
     )
     assert.equal(r.code, 0)

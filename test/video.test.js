@@ -70,13 +70,13 @@ test('非默认模型 no-wait 后，status 无需再次填写 model', async (t) 
   try {
     const fake = await fakeAgnesVideo(t, { completeAfterPolls: 1 })
     agnesConfig(home, `${fake.url}/v1`)
-    const created = await run(
-      ['video', '慢镜头', '--model', 'agnes-video-v2.0', '--num-frames', '121', '--no-wait', '--json'],
-      { env: { HOME: home.dir }, cwd: cwd.dir },
-    )
+    const created = await run(['video', '慢镜头', '--model', 'agnes-video-3.0-flash', '--no-wait', '--json'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
     assert.equal(created.code, 0)
     const task = JSON.parse(created.stdout)
-    assert.match(task.hint, /--model agnes-video-v2\.0/)
+    assert.match(task.hint, /--model agnes-video-3\.0-flash/)
 
     const status = await run(['status', task.video_id, '--wait', '--json'], {
       env: { HOME: home.dir },
@@ -84,8 +84,8 @@ test('非默认模型 no-wait 后，status 无需再次填写 model', async (t) 
     })
     assert.equal(status.code, 0)
     const result = JSON.parse(status.stdout)
-    assert.equal(result.model, 'agnes-video-v2.0')
-    assert.ok(fake.polls.every((p) => p.modelName === 'agnes-video-v2.0'))
+    assert.equal(result.model, 'agnes-video-3.0-flash')
+    assert.ok(fake.polls.every((p) => p.modelName === 'agnes-video-3.0-flash'))
   } finally {
     home.cleanup()
     cwd.cleanup()

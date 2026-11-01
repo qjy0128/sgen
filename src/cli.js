@@ -3,7 +3,7 @@ import { generateImage as sensenovaGenerate } from './sensenova.js'
 import { generateImage as agnesGenerate } from './agnes.js'
 import { prepareOutPath, downloadTo } from './save.js'
 import { usageErr } from './errors.js'
-import { renderModels, findModel, resolveModelId, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
+import { renderModels, findModel, resolveModelId, unsupportedModelReason, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
 import { validateImageParams } from './validate.js'
 import { imageToDataUri } from './media.js'
 import { callWithKeyPool } from './keys.js'
@@ -33,17 +33,13 @@ image 选项：
 
 video 选项：
   --model <名称>     指定模型（sgen models 查看可选值）
-  --seconds <秒>     时长 4–12 秒（默认 5；仅 2.5 系列）
-  --size <档位>      分辨率（2.5-flash 仅 720P；v2.0 支持 480p/720p/1080p）
-  --ratio <比例>     2.5 系列 6 档；v2.0 支持 5 档
+  --seconds <秒>     时长 4–12 秒（默认 5）
+  --size <档位>      分辨率（仅 720P）
+  --ratio <比例>     宽高比（21:9/16:9/4:3/1:1/3:4/9:16）
   --first-frame <路径> 首帧图（配 --last-frame 即首尾帧模式）
   --last-frame <路径>  尾帧图
   --ref-image <路径> 参考图（≤5 张，可重复）
   --ref-audio <路径> 参考音频（可重复）
-  --ref-video <路径> 参考视频（仅收费模型 agnes-video-2.5）
-  --video-start <秒> 参考视频的起始秒（配 --ref-video，默认 0）
-  --num-frames <数>  v2.0 帧数（8n+1，≤441）
-  --frame-rate <数>  v2.0 帧率（1–60）
   --no-wait          提交后立即返回 video_id，稍后用 sgen status 取片
   --timeout <秒>     等待上限（默认 600）
   --out <路径>       输出文件或目录（默认当前目录自动命名）
@@ -78,6 +74,9 @@ async function imageCmd(argv) {
   if (deprecatedFrom) {
     console.error(`⚠ ${deprecatedFrom} 已被平台改名为 ${modelId}，已自动改用新名。`)
   }
+  const unsupported = unsupportedModelReason(modelId)
+  if (unsupported) throw usageErr(unsupported)
+
   const rec = findModel(modelId)
   let size = args.values.size
 
@@ -90,12 +89,7 @@ async function imageCmd(argv) {
   }
 
   const providerId = rec ? rec.provider : providerForModelId(modelId)
-
-  if (rec && !rec.free && args.values.model === undefined) {
-    throw usageErr(`收费模型 ${modelId} 必须用 --model 显式指定`)
-  }
   if (!rec) console.error(`⚠ ${modelId} 不在内置模型目录中，无法判断是否收费，请先到平台确认价格。`)
-  else if (!rec.free) console.error(`⚠ ${modelId} 为收费模型，请先到平台确认价格。`)
 
   if (rec && args.values.image && !rec.input.referenceImages) {
     throw usageErr(`${modelId} 不支持图生图（--image）。sgen models 可查看各模型能力`)

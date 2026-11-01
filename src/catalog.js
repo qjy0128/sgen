@@ -29,7 +29,7 @@ export const MODELS = [
       kTiers: { '1K': 1024, '2K': 2048, '4K': 4096 },
     },
     ratios: ['1:1', '16:9', '9:16', '4:3', '3:4', '3:2', '2:3', '4:5', '5:4', '21:9'],
-    note: '公测免费 1500 次/5 小时；结果 URL 24 小时失效，工具已自动下载',
+    note: '公测免费；额度以平台当前规则为准；结果 URL 24 小时失效，工具已自动下载',
   },
   {
     id: 'sensenova-u1.5-fast',
@@ -67,7 +67,19 @@ export const MODELS = [
         '9:21': '1344x3136',
       },
     },
-    note: '推理生图/信息图见长；仅 1K/2K',
+    note: '公测免费；推理生图/信息图见长；仅 1K/2K',
+  },
+  {
+    id: 'agnes-image-2.5-flash',
+    provider: 'agnes',
+    type: 'image',
+    free: true,
+    sync: true,
+    caps: ['文生图', '图生图'],
+    input: { referenceImages: true },
+    size: { tiers: ['1K', '2K', '3K', '4K'], wxh: true },
+    ratios: ['1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9'],
+    note: '体验价 $0；当前全部分辨率与参考图免费',
   },
   {
     id: 'agnes-image-2.1-flash',
@@ -79,7 +91,7 @@ export const MODELS = [
     input: { referenceImages: true },
     size: { tiers: ['1K', '2K', '3K', '4K'], wxh: true },
     ratios: ['1:1', '3:4', '4:3', '16:9', '9:16', '2:3', '3:2', '21:9'],
-    note: '限免 $0；图生图前 3 张参考图免费',
+    note: '体验价 $0；体验期参考图全部免费',
   },
   {
     id: 'agnes-image-2.0-flash',
@@ -91,31 +103,7 @@ export const MODELS = [
     input: { referenceImages: true },
     size: { tiers: null, wxh: true },
     ratios: null,
-    note: '限免 $0；尺寸用精确像素写法（如 1024x768）',
-  },
-  {
-    id: 'agnes-video-v2.0',
-    provider: 'agnes',
-    type: 'video',
-    free: true,
-    sync: false,
-    caps: ['文生视频', '首帧', '首尾帧'],
-    size: { tiers: ['480p', '720p', '1080p'], wxh: null },
-    ratios: ['16:9', '9:16', '1:1', '4:3', '3:4'],
-    seconds: '按帧数：num_frames≤441 且 8n+1，frame_rate 1–60（约 18 秒封顶）',
-    request: { family: 'agnes-v20', modes: ['text', 'keyframe'] },
-    limits: {
-      frames: {
-        min: 9,
-        max: 441,
-        step: 8,
-        frameRate: { min: 1, max: 60 },
-        shortSides: { '480p': 480, '720p': 720, '1080p': 1080 },
-        defaultSize: '720p',
-        defaultRatio: '16:9',
-      },
-    },
-    note: '限免 $0/秒',
+    note: '体验价 $0；尺寸用精确像素写法（如 1024x768）',
   },
   {
     id: 'agnes-video-2.5-flash',
@@ -131,31 +119,21 @@ export const MODELS = [
     request: {
       family: 'agnes-v25',
       modes: ['text', 'keyframe', 'reference'],
-      media: { maxRefImages: 5, refAudio: true, refVideo: false },
+      media: { maxRefImages: 5, refAudio: true },
     },
     limits: { seconds: { min: 4, max: 12, default: 5 } },
-    note: '限免 $0/秒；不支持参考视频',
-  },
-  {
-    id: 'agnes-video-2.5',
-    provider: 'agnes',
-    type: 'video',
-    free: false,
-    sync: false,
-    caps: ['文生视频', '首帧', '首尾帧', '参考图', '参考音频', '参考视频'],
-    size: { tiers: ['720P', '960P', '2K'], wxh: null },
-    ratios: ['21:9', '16:9', '4:3', '1:1', '3:4', '9:16'],
-    seconds: '4–12 秒（默认 5）',
-    request: {
-      family: 'agnes-v25',
-      modes: ['text', 'keyframe', 'reference'],
-      media: { maxRefImages: null, refAudio: true, refVideo: true },
-    },
-    limits: { seconds: { min: 4, max: 12, default: 5 } },
-    pricing: { perSecond: { '720P': 0.025, '960P': 0.04, '2K': 0.055 }, extraRefImageFrom6: 0.005 },
-    note: '收费：720P $0.025/秒、960P $0.040/秒、2K $0.055/秒（计费=输出+输入视频秒数）',
+    note: '限时免费 $0/秒',
   },
 ]
+
+export const UNSUPPORTED_MODELS = {
+  'agnes-video-v2.0': 'agnes-video-v2.0 已于 2026-09-25 退役，请改用 agnes-video-2.5-flash',
+  'agnes-video-2.5': 'agnes-video-2.5 是收费模型；sgen 仅接入免费模型',
+}
+
+export function unsupportedModelReason(id) {
+  return UNSUPPORTED_MODELS[id] ?? null
+}
 
 export function findModel(id) {
   return MODELS.find((m) => m.id === id) ?? null
@@ -181,15 +159,18 @@ export function assertCatalog() {
     ids.add(model.id)
     if (!PROVIDERS[model.provider]) errors.push(`${model.id} 的供应商不存在：${model.provider}`)
     if (typeof model.free !== 'boolean') errors.push(`${model.id} 缺少 free 标记`)
+    if (!model.free) errors.push(`${model.id} 不是免费模型；sgen 仅收录免费模型`)
     if (model.type === 'image' && typeof model.input?.referenceImages !== 'boolean') {
       errors.push(`${model.id} 缺少 referenceImages 能力标记`)
     }
     if (model.type === 'video' && !model.request?.family) errors.push(`${model.id} 缺少视频请求族`)
-    if (!model.free && !model.pricing) errors.push(`${model.id} 是收费模型但缺少 pricing`)
   }
   for (const [alias, target] of Object.entries(MODEL_ALIASES)) {
     if (!ids.has(target)) errors.push(`别名 ${alias} 指向不存在的模型：${target}`)
     if (ids.has(alias)) errors.push(`别名 ${alias} 与目录内模型重名`)
+  }
+  for (const id of Object.keys(UNSUPPORTED_MODELS)) {
+    if (ids.has(id)) errors.push(`停用模型 ${id} 不应出现在可用目录中`)
   }
   for (const [id, type] of [
     [DEFAULT_IMAGE_MODEL, 'image'],
