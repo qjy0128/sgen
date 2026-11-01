@@ -9,6 +9,7 @@
 - 规格与工单在 `.scratch/sgen-cli/`；模型能力/限制的唯一事实来源是 `src/catalog.js`（改限制先改它，测试与 README 跟随）。
 - 自动更新检查以 main 分支 `package.json` 的 `version` 为新鲜度判据：**合并改动到 main 必须 bump version**，否则用户永远收不到更新提示。
 - 技能说明源文件在 `skill/sgen/SKILL.md`，正本安装于 `~/.agents/skills/sgen/`，修改后需同步（README 与 docs/agent-integration.md 有同步说明）。
+- DSH 插件在 `dsh-plugin/`（bundle `dsh-sgen`）：它只调用 `bin/sgen.js`，模型能力仍以 `src/catalog.js` 为准；改插件后跑 `npm run test:dsh-plugin`。
 
 ## Agent skills
 

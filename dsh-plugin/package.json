@@ -1,0 +1,45 @@
+{
+  "name": "dsh-sgen",
+  "version": "0.3.1",
+  "private": true,
+  "description": "SGeN 生图/生视频的 DeepSeek Harness 插件：原生工具、sgen 技能与本地作品面板。",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "lib/*.js",
+    "locale/*.json",
+    "icon.svg",
+    "cordis.patch.yml",
+    "README.md"
+  ],
+  "icon": "./icon.svg",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "sgen",
+    "image-generation",
+    "video-generation",
+    "sensenova",
+    "agnes"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "test": "node --check lib/index.js && node --check lib/client.js && node --test 'test/*.test.mjs'"
+  }
+}

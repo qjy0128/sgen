@@ -1,6 +1,6 @@
 {
   "name": "sgen",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "面向 Agent 的免费生图/生视频命令行工具（商汤 SenseNova + Agnes）",
   "type": "module",
   "bin": {
@@ -9,7 +9,13 @@
   "files": [
     "bin",
     "src",
-    "skill"
+    "skill",
+    "dsh-plugin/lib",
+    "dsh-plugin/locale",
+    "dsh-plugin/icon.svg",
+    "dsh-plugin/cordis.patch.yml",
+    "dsh-plugin/README.md",
+    "dsh-plugin/package.json"
   ],
   "repository": {
     "type": "git",
@@ -25,9 +31,10 @@
   ],
   "scripts": {
     "test": "node --test 'test/*.test.js'",
+    "test:dsh-plugin": "node --test 'dsh-plugin/test/*.test.mjs'",
     "check:syntax": "node scripts/check-syntax.js",
     "check:docs": "node scripts/check-docs.js",
-    "check": "npm run check:syntax && npm run check:docs && npm test"
+    "check": "npm run check:syntax && npm run check:docs && npm test && npm run test:dsh-plugin"
   },
   "engines": {
     "node": ">=22"

@@ -27,4 +27,4 @@ link ~/.trae-cn/skills/sgen ../../.agents/skills/sgen
 link ~/.gemini/config/skills/sgen ../../../.agents/skills/sgen
 
 echo "完成。Codex/dsh/Kimi Code/opencode 经 ~/.agents/skills 自动读取；"
-echo "mcode 与 WorkBuddy 无文件约定，接入方式见 docs/agent-integration.md。"
+echo "WorkBuddy 无文件约定，接入方式见 docs/agent-integration.md。"

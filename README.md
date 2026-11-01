@@ -195,9 +195,11 @@ sgen config init|set|list|test # 配置管理
 - 目录外模型仍会透传，方便试用新模型，但工具无法判断价格，会先给出明显警告；确认免费前不要用于批量任务。
 - “公测免费 / 体验价 $0 / 限时免费”都不是永久免费承诺，平台恢复收费后应先更新目录再使用。
 
-## 在各个 AI 编程工具中使用（ZCode / Claude Code / Codex / Qoder / Trae / opencode / Antigravity / dsh / Kimi Code / mcode / WorkBuddy）
+## 在各个 AI 编程工具中使用（ZCode / Claude Code / Codex / Qoder / Trae / opencode / Antigravity / dsh / Kimi Code / WorkBuddy）
 
-本机已完成全部接入（技能正本在 `~/.agents/skills/sgen/`，各工具按约定软链/写规则）。逐工具说明、mcode/WorkBuddy 的手动接入法、沙箱网络放行清单见 **[docs/agent-integration.md](docs/agent-integration.md)**。技能源文件改动后运行 `scripts/install-skill` 一键同步。
+本机已完成全部接入（技能正本在 `~/.agents/skills/sgen/`，各工具按约定软链/写规则）。逐工具说明、WorkBuddy 的手动接入法、沙箱网络放行清单见 **[docs/agent-integration.md](docs/agent-integration.md)**。技能源文件改动后运行 `scripts/install-skill` 一键同步。
+
+**DeepSeek Harness（DSH）插件**：仓库附带 `dsh-plugin/`（包名 `dsh-sgen`），把免费生图/生视频做成 5 个 DSH 原生工具、`sgen` 运行时技能和侧栏作品面板；安装、配置、安全边界与卸载见 **[dsh-plugin/README.md](dsh-plugin/README.md)**。
 
 ## 重要说明
 
