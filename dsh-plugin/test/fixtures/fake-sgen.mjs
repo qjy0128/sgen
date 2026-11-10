@@ -64,6 +64,17 @@ const prompt = positionals.join(' ')
 const promptText = positionals[positionals.length - 1] ?? ''
 
 if (command === 'models') {
+  if (booleans.has('json')) {
+    print({
+      ok: true,
+      models: [
+        { id: 'fake-image-model', provider: 'sensenova', type: 'image', free: true, sync: true, isDefault: true },
+        { id: 'fake-image-alt', provider: 'sensenova', type: 'image', free: true, sync: true, isDefault: false },
+        { id: 'fake-agnes-image', provider: 'agnes', type: 'image', free: true, sync: true, isDefault: false },
+        { id: 'fake-video-model', provider: 'agnes', type: 'video', free: true, sync: false, isDefault: true },
+      ],
+    })
+  }
   process.stdout.write(
     ['图片模型：', '  fake-image-model  免费·同步  文生图/图生图', '视频模型：', '  fake-video-model  免费·异步  文生视频', ''].join('\n'),
   )
@@ -151,7 +162,63 @@ if (command === 'status') {
 
 if (command === 'config') {
   const sub = argv[1]
+  if (sub === 'set') {
+    const file = path.join(process.env.HOME, '.sgen', 'config.json')
+    const raw = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
+    const pairs = argv.slice(2)
+    for (let index = 0; index < pairs.length; index += 2) {
+      const keyPath = pairs[index]
+      let value = pairs[index + 1]
+      const [provider, field] = keyPath.split('.')
+      if (keyPath.endsWith('.api_keys')) value = value.split(',').map((item) => item.trim()).filter(Boolean)
+      if (field) {
+        raw.providers ??= {}
+        raw.providers[provider] ??= {}
+        if (value === '') delete raw.providers[provider][field]
+        else raw.providers[provider][field] = value
+      } else if (value === '') {
+        delete raw[keyPath]
+      } else {
+        raw[keyPath] = value
+      }
+    }
+    fs.mkdirSync(path.dirname(file), { recursive: true })
+    fs.writeFileSync(file, `${JSON.stringify(raw, null, 2)}\n`)
+    process.stdout.write('fake config saved\n')
+    process.exit(0)
+  }
   if (sub === 'list') {
+    if (booleans.has('json')) {
+      const file = path.join(process.env.HOME, '.sgen', 'config.json')
+      const raw = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : {}
+      const sensenova = raw.providers?.sensenova ?? {}
+      const agnes = raw.providers?.agnes ?? {}
+      const region = agnes.region === 'china' ? 'china' : 'international'
+      print({
+        ok: true,
+        config_path: file,
+        config_exists: fs.existsSync(file),
+        providers: {
+          sensenova: {
+            keys: Array.isArray(sensenova.api_keys) ? sensenova.api_keys.length : 0,
+            base_url: sensenova.base_url || 'https://catalog-sensenova.example.com/v1',
+          },
+          agnes: {
+            keys: Array.isArray(agnes.api_keys) ? agnes.api_keys.length : 0,
+            region,
+            base_url: agnes.base_url || (region === 'china'
+              ? 'https://catalog-agnes-china.example.com/v1'
+              : 'https://catalog-agnes.example.com/v1'),
+          },
+        },
+        env: { SENSENOVA_API_KEY: false, AGNES_API_KEY: false },
+        default_models: {
+          image: raw.default_image_model || 'catalog-image-default',
+          video: raw.default_video_model || 'catalog-video-default',
+        },
+        update_check: raw.update_check !== false,
+      })
+    }
     process.stdout.write('商汤：1 把 Key（sk-****）  接口：https://token.sensenova.cn/v1\nAgnes：1 把 Key（ak-****）  区域：international  接口：https://apihub.agnes-ai.com/v1\n')
     process.exit(0)
   }

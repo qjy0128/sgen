@@ -55,14 +55,20 @@ export function loadConfig() {
   return {
     sensenova: {
       api_keys: keys.filter(Boolean),
-      base_url: (sn.base_url ?? DEFAULT_BASE_URLS.sensenova).replace(/\/+$/, ''),
+      base_url: (sn.base_url || DEFAULT_BASE_URLS.sensenova).replace(/\/+$/, ''),
     },
     agnes: {
       api_keys: agnesKeys.filter(Boolean),
-      base_url: (ag.base_url ?? AGNES_REGIONS[region]).replace(/\/+$/, ''),
+      base_url: (ag.base_url || AGNES_REGIONS[region]).replace(/\/+$/, ''),
       region,
     },
   }
+}
+
+export function configuredDefaultModel(kind) {
+  const key = kind === 'image' ? 'default_image_model' : 'default_video_model'
+  const value = readRawConfig()[key]
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined
 }
 
 // 取某供应商配置；无 Key 时报错并指出对应环境变量名（image/video/status 共用）

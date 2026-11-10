@@ -47,7 +47,7 @@
 ### dsh（DeepSeek Harness）
 技能契约与 Claude Skills 完全兼容：项目 `.agents/skills/`、全局 `~/.agents/skills/`（已装，装好 dsh 即生效）。项目内放 `AGENTS.md` 也会被官方 loader 读取。
 
-本机已安装原生插件 `dsh-plugin/`（bundle `dsh-sgen`）：5 个 `sgen_*` 工具、`sgen` 运行时技能和侧栏作品面板。安装/卸载/配置见 [../dsh-plugin/README.md](../dsh-plugin/README.md)。注意：本机已有用户级技能 `~/.agents/skills/sgen/`，DSH 会优先采用它；原生工具不受影响。插件生成的作品会写入 `~/.sgen/dsh-gallery.json` 并显示在侧栏面板。
+本机已安装原生插件 `dsh-plugin/`（bundle `dsh-sgen`）：5 个 `sgen_*` 工具、`sgen` 运行时技能和侧栏“试验场 / 配置 / 产物”工作台。安装/卸载/配置见 [../dsh-plugin/README.md](../dsh-plugin/README.md)。注意：本机已有用户级技能 `~/.agents/skills/sgen/`，DSH 会优先采用它；原生工具不受影响。插件生成的作品会写入 `~/.sgen/dsh-gallery.json` 并显示在“产物”Tab。
 
 ### Kimi Code（月之暗面）
 全局 `~/.kimi-code/AGENTS.md` ＋ 跨工具 `~/.agents/AGENTS.md`；技能读 `~/.kimi-code/skills/` 与 `~/.agents/skills/`（已覆盖后者）。装好后即用。

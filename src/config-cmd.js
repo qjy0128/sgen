@@ -1,6 +1,14 @@
+import fs from 'node:fs'
 import readline from 'node:readline'
-import { configPath, readRawConfig, saveRawConfig, loadConfig, AGNES_CHINA_HINT } from './config.js'
-import { PROVIDERS } from './catalog.js'
+import {
+  configPath,
+  configuredDefaultModel,
+  readRawConfig,
+  saveRawConfig,
+  loadConfig,
+  AGNES_CHINA_HINT,
+} from './config.js'
+import { DEFAULT_IMAGE_MODEL, DEFAULT_VIDEO_MODEL, findModel, PROVIDERS } from './catalog.js'
 import { maskKey } from './keys.js'
 import { usageErr } from './errors.js'
 import { httpTimeoutMs } from './api.js'
@@ -81,16 +89,28 @@ async function configInit() {
 }
 
 function parseBaseUrl(value) {
+  const text = value.trim()
+  if (!text) return ''
   let url
   try {
-    url = new URL(value)
+    url = new URL(text)
   } catch {
-    throw usageErr(`接口地址无效：${value}`)
+    throw usageErr(`接口地址无效：${text}`)
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
     throw usageErr('接口地址只支持 http:// 或 https://')
   }
-  return value.replace(/\/+$/, '')
+  return text.replace(/\/+$/, '')
+}
+
+function parseDefaultModel(value, kind) {
+  const id = value.trim()
+  if (!id) return ''
+  const model = findModel(id)
+  if (model && model.type !== kind) {
+    throw usageErr(`${id} 是${model.type === 'image' ? '图片' : '视频'}模型，不能设为默认${kind === 'image' ? '图片' : '视频'}模型`)
+  }
+  return id
 }
 
 // 可设项注册表：解析函数 + 帮助文案（含义与示例），帮助文本由同一份数据渲染
@@ -117,13 +137,23 @@ const SETTABLE = {
   },
   'sensenova.base_url': {
     parse: parseBaseUrl,
-    desc: '进阶：覆写商汤接口地址',
+    desc: '进阶：覆写商汤接口地址；空值恢复默认',
     example: 'sgen config set sensenova.base_url https://token.sensenova.cn/v1',
   },
   'agnes.base_url': {
     parse: parseBaseUrl,
-    desc: '进阶：覆写 Agnes 接口地址',
+    desc: '进阶：覆写 Agnes 接口地址；空值恢复默认',
     example: 'sgen config set agnes.base_url https://apihub.agnes-ai.com/v1',
+  },
+  default_image_model: {
+    parse: (v) => parseDefaultModel(v, 'image'),
+    desc: '默认图片模型 ID；空值恢复内置默认',
+    example: 'sgen config set default_image_model sensenova-u1.5-lite',
+  },
+  default_video_model: {
+    parse: (v) => parseDefaultModel(v, 'video'),
+    desc: '默认视频模型 ID；空值恢复内置默认',
+    example: 'sgen config set default_video_model agnes-video-2.5-flash',
   },
   update_check: {
     parse: (v) => {
@@ -143,35 +173,79 @@ function renderSettable() {
     .join('\n')
 }
 
-async function configSet(keyPath, value) {
-  if (!keyPath || value === undefined) {
-    throw usageErr(`用法：sgen config set <路径> <值>\n${renderSettable()}`)
+async function configSet(args) {
+  if (!args.length || args.length % 2 !== 0) {
+    throw usageErr(`用法：sgen config set <路径> <值> [路径 值 …]\n${renderSettable()}`)
   }
-  const item = SETTABLE[keyPath]
-  if (!item) {
-    throw usageErr(`不可设置的路径：${keyPath}\n${renderSettable()}`)
-  }
-  const parsed = item.parse(value)
-
-  const raw = readRawConfig()
-  const [providerId, field] = keyPath.split('.')
-  if (field === undefined) {
-    // 顶层配置项（如 update_check），不属于任何供应商
-    saveRawConfig({ ...raw, [keyPath]: parsed })
-  } else {
-    const providers = raw.providers ?? {}
-    providers[providerId] = { ...(providers[providerId] ?? {}), [field]: parsed }
-    saveRawConfig({ ...raw, providers })
+  const updates = []
+  for (let index = 0; index < args.length; index += 2) {
+    const keyPath = args[index]
+    const item = SETTABLE[keyPath]
+    if (!item) {
+      throw usageErr(`不可设置的路径：${keyPath}\n${renderSettable()}`)
+    }
+    updates.push({ keyPath, parsed: item.parse(args[index + 1]) })
   }
 
-  console.log(`已设置 ${keyPath}`)
-  if (keyPath === 'agnes.region' && parsed === 'china') console.error(AGNES_CHINA_HINT)
+  let next = readRawConfig()
+  for (const { keyPath, parsed } of updates) {
+    const [providerId, field] = keyPath.split('.')
+    next = { ...next }
+    if (field === undefined) {
+      if (parsed === '') delete next[keyPath]
+      else next[keyPath] = parsed
+    } else {
+      const providers = { ...(next.providers ?? {}) }
+      const provider = { ...(providers[providerId] ?? {}) }
+      if (parsed === '') delete provider[field]
+      else provider[field] = parsed
+      providers[providerId] = provider
+      next.providers = providers
+    }
+  }
+  saveRawConfig(next)
+
+  for (const { keyPath, parsed } of updates) {
+    console.log(`已设置 ${keyPath}${parsed === '' ? '（已恢复默认）' : ''}`)
+    if (keyPath === 'agnes.region' && parsed === 'china') console.error(AGNES_CHINA_HINT)
+  }
   return 0
 }
 
-function configList() {
+function configList(argv) {
+  const args = parseArgs(argv, { booleans: ['json'] })
+  if (args.positionals.length) throw usageErr(`config list 不接受位置参数：${args.positionals.join(' ')}`)
+  const file = configPath()
+  const raw = readRawConfig()
   const cfg = loadConfig()
-  const lines = [`配置文件：${configPath()}`]
+  const summary = {
+    ok: true,
+    config_path: file,
+    config_exists: fs.existsSync(file),
+    providers: {
+      sensenova: { keys: cfg.sensenova.api_keys.length, base_url: cfg.sensenova.base_url },
+      agnes: {
+        keys: cfg.agnes.api_keys.length,
+        region: cfg.agnes.region,
+        base_url: cfg.agnes.base_url,
+      },
+    },
+    env: {
+      SENSENOVA_API_KEY: Boolean(process.env.SENSENOVA_API_KEY?.trim()),
+      AGNES_API_KEY: Boolean(process.env.AGNES_API_KEY?.trim()),
+    },
+    default_models: {
+      image: configuredDefaultModel('image') ?? DEFAULT_IMAGE_MODEL,
+      video: configuredDefaultModel('video') ?? DEFAULT_VIDEO_MODEL,
+    },
+    update_check: raw.update_check !== false,
+  }
+  if (args.values.json) {
+    console.log(JSON.stringify(summary))
+    return 0
+  }
+
+  const lines = [`配置文件：${file}`]
   for (const pid of ['sensenova', 'agnes']) {
     const c = cfg[pid]
     const label = PROVIDERS[pid].label
@@ -180,10 +254,11 @@ function configList() {
     const regionPart = pid === 'agnes' ? `  区域：${c.region}` : ''
     lines.push(`${label}：${keysPart}${regionPart}  接口：${c.base_url}`)
   }
+  lines.push(`默认图片模型：${summary.default_models.image}；默认视频模型：${summary.default_models.video}`)
   lines.push(
     `环境变量兜底：SENSENOVA_API_KEY ${process.env.SENSENOVA_API_KEY ? '已设置' : '未设置'}；AGNES_API_KEY ${process.env.AGNES_API_KEY ? '已设置' : '未设置'}`,
   )
-  lines.push(`更新检查：${readRawConfig().update_check === false ? '关闭（update_check=false）' : '开启（每天一次，仅提示）'}`)
+  lines.push(`更新检查：${summary.update_check ? '开启（每天一次，仅提示）' : '关闭（update_check=false）'}`)
   console.log(lines.join('\n'))
   return 0
 }
@@ -274,16 +349,16 @@ async function configTest(argv) {
 export async function configCmd(argv) {
   const [sub, ...rest] = argv
   if (sub === 'init') return configInit()
-  if (sub === 'set') return configSet(rest[0], rest[1])
-  if (sub === 'list') return configList()
+  if (sub === 'set') return configSet(rest)
+  if (sub === 'list') return configList(rest)
   if (sub === 'test') return configTest(rest)
   throw usageErr(
     [
       '用法：sgen config <子命令>',
       '  init  交互式引导创建配置（推荐首次使用，会一步步问你要填什么）',
-      '  set   设置单项：sgen config set <路径> <值>，可设置：',
+      '  set   设置配置项：sgen config set <路径> <值>，可设置：',
       renderSettable(),
-      '  list  查看当前配置（Key 打码显示）',
+      '  list  查看当前配置（Key 打码显示；支持 --json 安全摘要）',
       '  test  逐把 Key 连通性检查（任一失败则退出码 1；支持 --json）',
     ].join('\n'),
   )

@@ -1,6 +1,6 @@
 import { parseArgs } from './args.js'
 import { usageErr } from './errors.js'
-import { resolveProviderConfig } from './config.js'
+import { configuredDefaultModel, resolveProviderConfig } from './config.js'
 import { findModel, DEFAULT_VIDEO_MODEL, providerForModelId, PROVIDERS } from './catalog.js'
 import { createVideoTask, queryVideoTask } from './agnes.js'
 import { callWithKeyPool, fingerprintKey } from './keys.js'
@@ -92,7 +92,7 @@ export async function videoCmd(argv) {
   const args = parseArgs(argv, VIDEO_FLAGS)
   const prompt = requireSinglePositional(args.positionals, '提示词')
   const values = args.values
-  const modelId = values.model ?? DEFAULT_VIDEO_MODEL
+  const modelId = values.model ?? configuredDefaultModel('video') ?? DEFAULT_VIDEO_MODEL
   const plan = buildVideoPlan({ modelId, prompt, values })
   if (plan.providerId !== 'agnes') {
     throw usageErr('商汤没有开放视频 API，sgen video 仅支持 Agnes 视频模型（sgen models 查看）')
@@ -173,7 +173,7 @@ export async function videoCmd(argv) {
 
 function resolveStatusContext(videoId, explicitModel) {
   const task = findVideoTask(videoId)
-  const modelId = explicitModel ?? task?.model ?? DEFAULT_VIDEO_MODEL
+  const modelId = explicitModel ?? task?.model ?? configuredDefaultModel('video') ?? DEFAULT_VIDEO_MODEL
   const known = findModel(modelId)
   if (known && known.type !== 'video') throw usageErr(`${modelId} 是图片模型，不能用于查询视频任务`)
   const providerId = known?.provider ?? providerForModelId(modelId)

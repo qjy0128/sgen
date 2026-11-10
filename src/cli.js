@@ -1,9 +1,9 @@
-import { resolveProviderConfig } from './config.js'
+import { configuredDefaultModel, resolveProviderConfig } from './config.js'
 import { generateImage as sensenovaGenerate } from './sensenova.js'
 import { generateImage as agnesGenerate } from './agnes.js'
 import { prepareOutPath, downloadTo } from './save.js'
 import { usageErr } from './errors.js'
-import { renderModels, findModel, resolveModelId, unsupportedModelReason, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
+import { MODELS, renderModels, findModel, resolveModelId, unsupportedModelReason, DEFAULT_IMAGE_MODEL, providerForModelId, PROVIDERS, assertCatalog } from './catalog.js'
 import { validateImageParams } from './validate.js'
 import { imageToDataUri } from './media.js'
 import { callWithKeyPool } from './keys.js'
@@ -18,7 +18,7 @@ const USAGE = `用法：sgen <命令> [参数]
   image <提示词> [选项]        生成图片（默认商汤 sensenova-u1.5-lite）
   video <提示词> [选项]        生成视频（默认 Agnes agnes-video-2.5-flash，自动等待出片）
   status <video_id> [选项]     查询/续等/下载视频任务
-  models                       查看全部内置模型与能力限制
+  models [--json]              查看全部内置模型与能力限制；--json 输出结构化目录
   config init|set|list|test    管理配置与 Key（首次用 init；set 示例：sgen config set agnes.region china，
                                全部可设项与含义运行 sgen config 查看）
 
@@ -69,7 +69,7 @@ async function imageCmd(argv) {
     throw usageErr(`多余参数：${args.positionals.slice(1).join(' ')}（包含空格的提示词请用引号包住）`)
   }
 
-  const requestedModel = args.values.model ?? DEFAULT_IMAGE_MODEL
+  const requestedModel = args.values.model ?? configuredDefaultModel('image') ?? DEFAULT_IMAGE_MODEL
   const { id: modelId, deprecatedFrom } = resolveModelId(requestedModel)
   if (deprecatedFrom) {
     console.error(`⚠ ${deprecatedFrom} 已被平台改名为 ${modelId}，已自动改用新名。`)
@@ -147,6 +147,35 @@ async function imageCmd(argv) {
   return 0
 }
 
+function modelsCmd(argv) {
+  const args = parseArgs(argv, { booleans: ['json'] })
+  if (args.positionals.length) throw usageErr(`models 不接受位置参数：${args.positionals.join(' ')}`)
+  if (args.values.json) {
+    console.log(JSON.stringify({
+      ok: true,
+      models: MODELS.map((model) => ({
+        id: model.id,
+        provider: model.provider,
+        type: model.type,
+        free: model.free,
+        sync: model.sync,
+        isDefault: model.isDefault === true,
+        sizeTiers: [...new Set([...(model.size?.tiers ?? []), ...Object.keys(model.size?.kTiers ?? {})])],
+        defaultSize: model.size?.default ?? '',
+        customSize: Boolean(model.size?.wxh),
+        ratios: Array.isArray(model.ratios) ? [...model.ratios] : [],
+        referenceImages: model.type === 'image'
+          ? model.input.referenceImages === true
+          : model.request?.modes.includes('reference') && (model.request?.media?.maxRefImages ?? 0) > 0,
+        seconds: model.limits?.seconds ? { ...model.limits.seconds } : null,
+      })),
+    }))
+  } else {
+    console.log(renderModels())
+  }
+  return 0
+}
+
 async function runCommand(argv) {
   const [cmd, ...rest] = argv
   try {
@@ -158,10 +187,7 @@ async function runCommand(argv) {
     if (cmd === 'image') return await imageCmd(rest)
     if (cmd === 'video') return await videoCmd(rest)
     if (cmd === 'status') return await statusCmd(rest)
-    if (cmd === 'models') {
-      console.log(renderModels())
-      return 0
-    }
+    if (cmd === 'models') return modelsCmd(rest)
     if (cmd === 'config') return await configCmd(rest)
     throw usageErr(`未知命令：${cmd}\n${USAGE}`)
   } catch (err) {

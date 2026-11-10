@@ -733,7 +733,7 @@ export function registerTools(ctx, config, runtime) {
       name: 'sgen_config',
       description:
         '查看 SGeN 配置或逐把检查 API Key 连通性。只读，不会修改配置；' +
-        '设置 Key 请在终端运行 sgen config init 或 sgen config set。',
+        '设置 Key 可使用 sgen 侧栏，或在终端运行 sgen config init / config set。',
       parameters: params(
         {
           action: {
@@ -818,7 +818,7 @@ export function registerTools(ctx, config, runtime) {
           ? results
               .map((item) => `${item.label}${item.key ? ` ${item.key}` : ''}：${item.message}`)
               .join('\n')
-          : '没有可检查的 Key；请先在终端运行 sgen config init。'
+          : '没有可检查的 Key；请先在 sgen 侧栏配置，或在终端运行 sgen config init。'
         return { ok: data.ok === true, action, text, results }
       },
     }),

@@ -25,6 +25,7 @@ export const MODELS = [
     // 1K/2K/4K 档位由工具本地换算为精确像素（kTiers=长边像素）
     size: {
       tiers: ['auto'],
+      default: 'auto',
       wxh: { min: 512, max: 4096, multipleOf: 32, maxRatio: 3 },
       kTiers: { '1K': 1024, '2K': 2048, '4K': 4096 },
     },

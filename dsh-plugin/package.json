@@ -1,8 +1,8 @@
 {
   "name": "dsh-sgen",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "private": true,
-  "description": "SGeN 生图/生视频的 DeepSeek Harness 插件：原生工具、sgen 技能与本地作品面板。",
+  "description": "SGeN 生图/生视频的 DeepSeek Harness 插件：原生工具、sgen 技能与试验场/配置/产物工作台。",
   "type": "module",
   "main": "./lib/index.js",
   "exports": {

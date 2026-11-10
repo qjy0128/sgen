@@ -26,6 +26,29 @@ test('sgen models 列出全部 6 个内置免费模型及关键能力信息', as
   assert.match(r.stdout, /sensenova-u1\.5-lite/)
 })
 
+test('sgen models --json 按供应商和类型输出结构化模型目录', async () => {
+  const r = await run(['models', '--json'])
+  assert.equal(r.code, 0)
+  const data = JSON.parse(r.stdout)
+  assert.equal(data.ok, true)
+  assert.equal(data.models.length, ALL_MODELS.length)
+  for (const id of ALL_MODELS) {
+    assert.ok(data.models.some((model) => model.id === id), `JSON 应包含 ${id}`)
+  }
+  const lite = data.models.find((model) => model.id === 'sensenova-u1.5-lite')
+  assert.equal(lite.provider, 'sensenova')
+  assert.equal(lite.defaultSize, 'auto')
+  assert.deepEqual(lite.sizeTiers, ['auto', '1K', '2K', '4K'])
+  const video = data.models.find((model) => model.id === 'agnes-video-2.5-flash')
+  assert.equal(video.type, 'video')
+  assert.equal(video.referenceImages, true)
+  assert.deepEqual(video.seconds, { min: 4, max: 12, default: 5 })
+  const fast = data.models.find((model) => model.id === 'sensenova-u1.5-fast')
+  assert.equal(fast.referenceImages, false)
+  assert.deepEqual(fast.sizeTiers, ['1K', '2K'])
+  assert.ok(data.models.every((model) => typeof model.id === 'string' && typeof model.provider === 'string'))
+})
+
 test('--help 用法面与实际参数一致：video 与 status 的全部选项都列出', async () => {
   const r = await run(['--help'])
   assert.equal(r.code, 0)

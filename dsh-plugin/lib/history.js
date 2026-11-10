@@ -7,9 +7,9 @@
 
 import fs from 'node:fs'
 import fsp from 'node:fs/promises'
-import os from 'node:os'
 import path from 'node:path'
 import { createHash } from 'node:crypto'
+import { runSgenJson } from './run.js'
 
 const HISTORY_VERSION = 1
 const PROMPT_MAX = 500
@@ -34,12 +34,14 @@ function normalizeItem(raw) {
     file: path.resolve(file),
     name: safeString(raw.name, 255) || path.basename(file),
     model: safeString(raw.model, 200) || '未知模型',
+    source: safeString(raw.source, 40) || 'agent',
     prompt: safeString(raw.prompt, PROMPT_MAX),
     created_at: safeString(raw.created_at, 40) || new Date().toISOString(),
     ...(typeof raw.width === 'number' ? { width: raw.width } : {}),
     ...(typeof raw.height === 'number' ? { height: raw.height } : {}),
     ...(raw.size ? { size: safeString(raw.size, 40) } : {}),
     ...(raw.ratio ? { ratio: safeString(raw.ratio, 40) } : {}),
+    ...(Number.isFinite(raw.seconds) ? { seconds: raw.seconds } : {}),
     ...(Number.isFinite(raw.elapsed_ms) ? { elapsed_ms: Math.round(raw.elapsed_ms) } : {}),
     ...(raw.video_id ? { video_id: safeString(raw.video_id, 200) } : {}),
   }
@@ -131,45 +133,39 @@ export function createHistoryStore(config) {
         return item
       })
     },
+
+    async remove(id) {
+      return enqueue(async () => {
+        const items = await read()
+        const removed = items.find((item) => item.id === id)
+        if (!removed) return undefined
+        await write(items.filter((item) => item.id !== id))
+        return removed
+      })
+    },
   }
 }
 
-/** 读取 SGeN 配置的“安全摘要”：只给数量、区域和接口域名，绝不返回 Key 原文。 */
+/** 通过 CLI 读取有效配置的安全摘要，避免插件复制默认值或接触 Key 原文。 */
 export async function readSgenConfigSummary(config) {
-  const configPath = path.join(os.homedir(), '.sgen', 'config.json')
-  const summary = {
-    config_path: configPath,
-    config_exists: false,
-    providers: {
-      sensenova: { keys: 0 },
-      agnes: { keys: 0, region: 'international' },
-    },
-    env: {
-      SENSENOVA_API_KEY: Boolean(process.env.SENSENOVA_API_KEY?.trim()),
-      AGNES_API_KEY: Boolean(process.env.AGNES_API_KEY?.trim()),
-    },
-  }
-  let raw
-  try {
-    raw = JSON.parse(await fsp.readFile(configPath, 'utf8'))
-    summary.config_exists = true
-  } catch {
-    return summary
-  }
-  const providers = raw && typeof raw === 'object' ? raw.providers : undefined
-  for (const id of ['sensenova', 'agnes']) {
-    const entry = providers && typeof providers === 'object' ? providers[id] : undefined
-    const keys = Array.isArray(entry?.api_keys) ? entry.api_keys.filter(Boolean) : []
-    summary.providers[id] = {
-      keys: keys.length,
-      ...(id === 'agnes' ? { region: entry?.region === 'china' ? 'china' : 'international' } : {}),
-      ...(typeof entry?.base_url === 'string' && entry.base_url.trim()
-        ? { base_url: entry.base_url.trim() }
-        : {}),
-    }
-  }
-  summary.update_check = raw?.update_check !== false
+  const { data } = await runSgenJson(config, ['config', 'list', '--json'], {
+    cwd: config.sgenRoot,
+    timeoutMs: Math.min(config.commandTimeoutMs, 10_000),
+  })
+  if (!data || data.ok !== true) throw new Error('sgen config list 没有返回有效配置')
+  const { ok: _ok, ...summary } = data
   return summary
+}
+
+async function readSgenModels(config) {
+  const { data } = await runSgenJson(config, ['models', '--json'], {
+    cwd: config.sgenRoot,
+    timeoutMs: Math.min(config.commandTimeoutMs, 10_000),
+  })
+  if (!data || data.ok !== true || !Array.isArray(data.models)) {
+    throw new Error('sgen models 没有返回有效模型目录')
+  }
+  return data.models
 }
 
 /** 读取 SGeN 本地版本号，用于面板展示。读不到时返回 undefined。 */
@@ -184,17 +180,20 @@ export async function readSgenVersion(config) {
 
 /** 汇总面板需要的全部只读数据。 */
 export async function readPanelState(config, history) {
-  const [summary, version, items] = await Promise.all([
+  const [summary, version, items, models] = await Promise.all([
     readSgenConfigSummary(config),
     readSgenVersion(config),
     history.list(config.maxHistory),
+    readSgenModels(config),
   ])
   return {
     version: version ?? null,
     root: config.sgenRoot,
     history_file: config.historyFile,
+    playground_dir: config.playgroundDir,
     max_history: config.maxHistory,
     ...summary,
+    models,
     items,
   }
 }

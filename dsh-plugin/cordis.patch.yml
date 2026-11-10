@@ -3,7 +3,7 @@
 # 这个 bundle 插入一个宿主行，提供：
 #   - sgen_image / sgen_video / sgen_status / sgen_models / sgen_config 原生工具；
 #   - 运行时技能 sgen（正文来自仓库 skill/sgen/SKILL.md）；
-#   - GET /sgen/state 与 GET /sgen/file 两个只读路由，供侧栏作品面板使用。
+#   - GET /sgen/state、POST /sgen/config、POST /sgen/generate、GET/DELETE /sgen/file。
 #
 # 默认值已经能从插件所在位置推导出 SGeN 仓库；需要覆盖时在用户 patch 层
 # 用同一个 id（sgen）写 config，例如：

@@ -109,6 +109,26 @@ test('agnes-image-2.0-flash：精确像素透传、不发送 ratio 字段', asyn
   }
 })
 
+test('配置的默认图片模型用于未传 --model 的生图', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const agnes = await fakeAgnes(t)
+    writeConfig(home.dir, { agnes: { api_keys: ['ak-test'], base_url: `${agnes.url}/v1` } })
+    const saved = await run(['config', 'set', 'default_image_model', 'agnes-image-custom'], {
+      env: { HOME: home.dir },
+    })
+    assert.equal(saved.code, 0)
+
+    const r = await run(['image', '一只猫'], { env: { HOME: home.dir }, cwd: cwd.dir })
+    assert.equal(r.code, 0)
+    assert.equal(agnes.calls[0].body.model, 'agnes-image-custom')
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
 test('默认模型仍是商汤 u1.5-lite（不传 --model 时行为不变）', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')

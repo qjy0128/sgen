@@ -53,9 +53,12 @@ sgen --help       # 打印用法说明即安装成功
 ```bash
 sgen config init          # 引导式创建配置（也支持管道：echo "sk-xxx" | sgen config init）
 sgen config list          # 查看配置（Key 打码显示）
+sgen config list --json   # 输出有效配置的安全摘要（不含 Key 原文）
 sgen config test          # 逐把 Key 连通性检查；任一失败则退出码 1
 sgen config test --json   # 输出结构化检查结果
 sgen config set agnes.region china   # Agnes 切换中国版（域名自动换 api.agnes-ai.cn）
+sgen config set default_image_model sensenova-u1.5-lite
+sgen config set default_video_model agnes-video-2.5-flash
 ```
 
 配置文件 `~/.sgen/config.json`（**明文存 Key，只在你本机、不在仓库内，不会被 git 提交**）。工具会把 `~/.sgen/` 权限收紧为 `0700`、配置与状态文件收紧为 `0600`，仅当前用户可读写：
@@ -65,7 +68,9 @@ sgen config set agnes.region china   # Agnes 切换中国版（域名自动换 a
   "providers": {
     "sensenova": { "api_keys": ["sk-第一把", "sk-第二把"] },
     "agnes": { "api_keys": ["ak-xxx"], "region": "international" }
-  }
+  },
+  "default_image_model": "sensenova-u1.5-lite",
+  "default_video_model": "agnes-video-2.5-flash"
 }
 ```
 
@@ -74,6 +79,7 @@ sgen config set agnes.region china   # Agnes 切换中国版（域名自动换 a
 - 生成请求不会自动重试：连接中断时宁可报告“结果不确定”，也不冒险重复生成；401/403/429 的明确响应仍按 Key 池规则处理
 - 单次 HTTP 调用超时默认 300 秒，可用 `SGEN_HTTP_TIMEOUT_MS` 覆写；视频 `--timeout` 是整个等待流程的硬上限
 - `base_url` 可直接覆写（默认商汤 `https://token.sensenova.cn/v1`；Agnes 国际版 `https://apihub.agnes-ai.com/v1`、中国版 `https://api.agnes-ai.cn/v1`）
+- `default_image_model` / `default_video_model` 可修改未传 `--model` 时使用的模型；设为空字符串可恢复内置默认
 - Agnes 国际版与中国版接口域名不同；**Key 目前通用**（官方未承诺长期保持），切换区域只影响请求走哪个域名
 
 配置完成后验证：
@@ -145,6 +151,7 @@ sgen status vid-123 --wait     # 继续等待到出片并自动下载
 
 ```bash
 sgen models                    # 打印全部内置模型能力矩阵
+sgen models --json             # 输出模型 ID、供应商和图片/视频类型
 sgen config init|set|list|test # 配置管理
 ```
 

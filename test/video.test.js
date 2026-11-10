@@ -92,6 +92,30 @@ test('非默认模型 no-wait 后，status 无需再次填写 model', async (t) 
   }
 })
 
+test('配置的默认视频模型用于未传 --model 的提交', async (t) => {
+  const home = tmpDir('sgen-home-')
+  const cwd = tmpDir('sgen-cwd-')
+  try {
+    const fake = await fakeAgnesVideo(t)
+    agnesConfig(home, `${fake.url}/v1`)
+    const saved = await run(['config', 'set', 'default_video_model', 'agnes-video-custom'], {
+      env: { HOME: home.dir },
+    })
+    assert.equal(saved.code, 0)
+
+    const r = await run(['video', '自定义模型', '--no-wait', '--json'], {
+      env: { HOME: home.dir },
+      cwd: cwd.dir,
+    })
+    assert.equal(r.code, 0)
+    assert.equal(JSON.parse(r.stdout).model, 'agnes-video-custom')
+    assert.equal(fake.creations[0].body.model, 'agnes-video-custom')
+  } finally {
+    home.cleanup()
+    cwd.cleanup()
+  }
+})
+
 test('多 Key 创建异步任务后，status 优先使用创建任务的那把 Key', async (t) => {
   const home = tmpDir('sgen-home-')
   const cwd = tmpDir('sgen-cwd-')

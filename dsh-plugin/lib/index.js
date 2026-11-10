@@ -4,7 +4,7 @@
  * 组成：
  *   - lib/tools.js    5 个原生工具（生图、生视频、查任务、模型目录、配置检查）
  *   - lib/skill.js    运行时技能 sgen（正文来自仓库 skill/sgen/SKILL.md）
- *   - lib/routes.js   只读作品面板数据与文件路由
+ *   - lib/routes.js   试验场生成、配置保存、作品数据与文件路由
  *   - lib/client.js   浏览器半边（侧栏 sgen 面板）
  *
  * 插件不 import 任何 @deepseek-ai/* 包，DSH 的 Loader 直接调用 apply()。

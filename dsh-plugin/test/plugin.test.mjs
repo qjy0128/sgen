@@ -2,9 +2,10 @@ import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { Writable } from 'node:stream'
+import { Readable, Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
+import { normalizeConfig } from '../lib/config.js'
 import { apply } from '../lib/index.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -54,7 +55,31 @@ function makeRepo(temp) {
   const repo = path.join(temp, 'sgen')
   fs.mkdirSync(path.join(repo, 'bin'), { recursive: true })
   fs.mkdirSync(path.join(repo, 'skill', 'sgen'), { recursive: true })
+  fs.mkdirSync(path.join(repo, 'src'), { recursive: true })
   fs.writeFileSync(path.join(repo, 'bin', 'sgen.js'), '// fake entry\n')
+  fs.writeFileSync(
+    path.join(repo, 'src', 'catalog.js'),
+    `export const PROVIDERS = {
+      sensenova: { base_url: 'https://catalog-sensenova.example.com/v1' },
+      agnes: { base_url: 'https://catalog-agnes.example.com/v1' },
+    }
+    export const DEFAULT_IMAGE_MODEL = 'catalog-image-default'
+    export const DEFAULT_VIDEO_MODEL = 'catalog-video-default'
+    `,
+  )
+  fs.writeFileSync(
+    path.join(repo, 'src', 'config.js'),
+    `import { PROVIDERS } from './catalog.js'
+    export const DEFAULT_BASE_URLS = {
+      sensenova: PROVIDERS.sensenova.base_url,
+      agnes: PROVIDERS.agnes.base_url,
+    }
+    export const AGNES_REGIONS = {
+      international: PROVIDERS.agnes.base_url,
+      china: 'https://catalog-agnes-china.example.com/v1',
+    }
+    `,
+  )
   fs.writeFileSync(
     path.join(repo, 'package.json'),
     `${JSON.stringify({ name: 'sgen', version: '9.9.9', bin: { sgen: 'bin/sgen.js' } }, null, 2)}\n`,
@@ -189,6 +214,8 @@ test('注册工具、技能和面板路由', (t) => {
     assert.equal(videoProperties[removed], undefined, `视频工具不应再暴露 ${removed}`)
   }
   assert.ok(ctx.routes.has('/sgen/state'))
+  assert.ok(ctx.routes.has('/sgen/config'))
+  assert.ok(ctx.routes.has('/sgen/generate'))
   assert.ok(ctx.routes.has('/sgen/file'))
 })
 
@@ -289,6 +316,250 @@ test('sgen_models 有缓存，sgen_config 能列出配置并测试连通性', as
   // config test 必须带 --json，且不能被误当成位置参数
   const argv = readArgs(argsFile).at(-1)
   assert.deepEqual(argv, ['config', 'test', '--json'])
+})
+
+test('两家服务商的独立 Key 可以一次保存', async (t) => {
+  const { ctx, temp, argsFile } = setup(t)
+  const snKey = 'sk-independent-sensenova'
+  const agnesKey = 'ak-independent-agnes'
+  const request = Readable.from([JSON.stringify({
+    api_keys: { sensenova: snKey, agnes: agnesKey },
+  })])
+  request.method = 'POST'
+  request.url = '/sgen/config'
+  request.headers = { host: '127.0.0.1:12345', 'content-type': 'application/json' }
+  const response = new CaptureResponse()
+  await ctx.routes.get('/sgen/config').handler(request, response)
+  await response.finished
+
+  assert.equal(response.statusCode, 200)
+  assert.ok(!response.body.toString('utf8').includes(snKey))
+  assert.ok(!response.body.toString('utf8').includes(agnesKey))
+  const config = JSON.parse(fs.readFileSync(path.join(temp, '.sgen', 'config.json'), 'utf8'))
+  assert.deepEqual(config.providers.sensenova.api_keys, [snKey])
+  assert.deepEqual(config.providers.agnes.api_keys, [agnesKey])
+  assert.deepEqual(readArgs(argsFile).find((argv) => argv[0] === 'config' && argv[1] === 'set'), [
+    'config',
+    'set',
+    'sensenova.api_keys',
+    snKey,
+    'agnes.api_keys',
+    agnesKey,
+  ])
+})
+
+test('侧栏保存 Key、Base URL 和默认模型，响应不回传 Key', async (t) => {
+  const { ctx, temp, argsFile } = setup(t)
+  const route = ctx.routes.get('/sgen/config')
+
+  async function post(payload, host = '127.0.0.1:12345') {
+    const request = Readable.from([JSON.stringify(payload)])
+    request.method = 'POST'
+    request.url = '/sgen/config'
+    request.headers = { host, 'content-type': 'application/json' }
+    const response = new CaptureResponse()
+    await route.handler(request, response)
+    await response.finished
+    return response
+  }
+
+  const secret = 'ak-sidebar-secret'
+  const saved = await post({
+    provider: 'agnes',
+    api_key: secret,
+    base_url: 'https://sidebar.example.com/v1/',
+    default_image_model: 'agnes-image-2.5-flash',
+    default_video_model: 'agnes-video-2.5-flash',
+  })
+  assert.equal(saved.statusCode, 200)
+  assert.ok(!saved.body.toString('utf8').includes(secret))
+  const state = JSON.parse(saved.body.toString('utf8')).data
+  assert.equal(state.providers.agnes.keys, 1)
+  assert.equal(state.providers.agnes.base_url, 'https://sidebar.example.com/v1/')
+  assert.equal(state.default_models.image, 'agnes-image-2.5-flash')
+  assert.equal(state.default_models.video, 'agnes-video-2.5-flash')
+
+  const config = JSON.parse(fs.readFileSync(path.join(temp, '.sgen', 'config.json'), 'utf8'))
+  assert.deepEqual(config.providers.agnes.api_keys, [secret])
+  assert.equal(config.default_image_model, 'agnes-image-2.5-flash')
+  const calls = readArgs(argsFile)
+  assert.deepEqual(calls.find((argv) => argv[0] === 'config' && argv[1] === 'set'), [
+    'config',
+    'set',
+    'agnes.api_keys',
+    secret,
+    'agnes.base_url',
+    'https://sidebar.example.com/v1/',
+    'default_image_model',
+    'agnes-image-2.5-flash',
+    'default_video_model',
+    'agnes-video-2.5-flash',
+  ])
+  assert.ok(calls.some((argv) => argv.join(' ') === 'config list --json'))
+  assert.ok(calls.some((argv) => argv.join(' ') === 'models --json'))
+
+  const reset = await post({
+    provider: 'agnes',
+    api_key: '',
+    base_url: '',
+    default_image_model: '',
+    default_video_model: '',
+  })
+  assert.equal(reset.statusCode, 200)
+  const resetConfig = JSON.parse(fs.readFileSync(path.join(temp, '.sgen', 'config.json'), 'utf8'))
+  assert.deepEqual(resetConfig.providers.agnes.api_keys, [secret], 'Key 留空必须保留原值')
+  assert.equal(resetConfig.providers.agnes.base_url, undefined)
+  assert.equal(resetConfig.default_image_model, undefined)
+  assert.equal(resetConfig.default_video_model, undefined)
+
+  const beforeDenied = readArgs(argsFile).length
+  const denied = await post({ provider: 'agnes', api_key: 'must-not-save' }, 'evil.example:12345')
+  assert.equal(denied.statusCode, 403)
+  assert.equal(readArgs(argsFile).length, beforeDenied)
+})
+
+test('面板摘要显示正在生效的内置默认地址和模型', async (t) => {
+  const { ctx, temp } = setup(t)
+  const configDir = path.join(temp, '.sgen')
+  fs.mkdirSync(configDir, { recursive: true })
+  fs.writeFileSync(
+    path.join(configDir, 'config.json'),
+    JSON.stringify({
+      providers: {
+        sensenova: { api_keys: ['sk-test'] },
+        agnes: { api_keys: ['ak-test'] },
+      },
+    }),
+  )
+
+  const response = new CaptureResponse()
+  await ctx.routes.get('/sgen/state').handler(
+    { method: 'GET', url: '/sgen/state', headers: { host: '127.0.0.1:12345' } },
+    response,
+  )
+  await response.finished
+  assert.equal(response.statusCode, 200)
+  const state = JSON.parse(response.body.toString('utf8')).data
+  assert.equal(state.providers.sensenova.keys, 1)
+  assert.equal(state.providers.agnes.keys, 1)
+  assert.equal(state.providers.sensenova.base_url, 'https://catalog-sensenova.example.com/v1')
+  assert.equal(state.providers.agnes.base_url, 'https://catalog-agnes.example.com/v1')
+  assert.equal(state.default_models.image, 'catalog-image-default')
+  assert.equal(state.default_models.video, 'catalog-video-default')
+  assert.equal(state.models.length, 4)
+  assert.equal(state.models.filter((model) => model.provider === 'sensenova').length, 2)
+  assert.equal(state.models.filter((model) => model.provider === 'agnes' && model.type === 'video').length, 1)
+})
+
+test('试验场生成图片：参考图、参数、产物索引和文件预览形成闭环', async (t) => {
+  const { ctx, temp, historyFile, argsFile } = setup(t)
+  const request = Readable.from([JSON.stringify({
+    kind: 'image',
+    prompt: '试验场图片',
+    model: 'fake-image-model',
+    size: '2K',
+    ratio: '16:9',
+    images: [{ data_url: `data:image/png;base64,${PNG.toString('base64')}` }],
+  })])
+  request.method = 'POST'
+  request.url = '/sgen/generate'
+  request.headers = { host: '127.0.0.1:12345', 'content-type': 'application/json' }
+  const response = new CaptureResponse()
+  await ctx.routes.get('/sgen/generate').handler(request, response)
+  await response.finished
+
+  assert.equal(response.statusCode, 200)
+  const body = JSON.parse(response.body.toString('utf8'))
+  assert.equal(body.ok, true)
+  assert.equal(body.item.kind, 'image')
+  assert.equal(body.item.source, 'playground')
+  assert.equal(body.item.prompt, '试验场图片')
+  assert.ok(fs.existsSync(body.item.file))
+  assert.equal(fs.realpathSync(path.dirname(body.item.file)), fs.realpathSync(path.join(temp, 'sgen')))
+  assert.equal(readHistory(historyFile)[0].id, body.item.id)
+
+  const argv = readArgs(argsFile).find((args) => args[0] === 'image')
+  assert.equal(argv[argv.indexOf('--size') + 1], '2K')
+  assert.equal(argv[argv.indexOf('--ratio') + 1], '16:9')
+  const reference = argv[argv.indexOf('--image') + 1]
+  assert.ok(reference.includes('sgen-dsh-playground-'))
+  assert.equal(fs.existsSync(reference), false, '生成结束后应清理参考图临时副本')
+
+  const fileResponse = new CaptureResponse()
+  await ctx.routes.get('/sgen/file').handler(
+    { method: 'GET', url: `/sgen/file?id=${body.item.id}`, headers: { host: '127.0.0.1:12345' } },
+    fileResponse,
+  )
+  await fileResponse.finished
+  assert.equal(fileResponse.statusCode, 200)
+  assert.deepEqual(fileResponse.body, PNG)
+
+  const deleted = new CaptureResponse()
+  await ctx.routes.get('/sgen/file').handler(
+    { method: 'DELETE', url: `/sgen/file?id=${body.item.id}`, headers: { host: '127.0.0.1:12345' } },
+    deleted,
+  )
+  await deleted.finished
+  assert.equal(deleted.statusCode, 200)
+  assert.equal(fs.existsSync(body.item.file), false)
+  assert.equal(readHistory(historyFile).length, 0)
+
+  const missing = new CaptureResponse()
+  await ctx.routes.get('/sgen/file').handler(
+    { method: 'DELETE', url: `/sgen/file?id=${body.item.id}`, headers: { host: '127.0.0.1:12345' } },
+    missing,
+  )
+  await missing.finished
+  assert.equal(missing.statusCode, 200)
+  assert.equal(JSON.parse(missing.body.toString('utf8')).already_deleted, true)
+})
+
+test('产物目录可修改并持久化到插件设置', async (t) => {
+  const { ctx, temp } = setup(t)
+  const request = Readable.from([JSON.stringify({ playground_dir: '~/custom-sgen-output' })])
+  request.method = 'POST'
+  request.url = '/sgen/config'
+  request.headers = { host: '127.0.0.1:12345', 'content-type': 'application/json' }
+  const response = new CaptureResponse()
+  await ctx.routes.get('/sgen/config').handler(request, response)
+  await response.finished
+
+  assert.equal(response.statusCode, 200)
+  const expected = path.join(temp, 'custom-sgen-output')
+  const body = JSON.parse(response.body.toString('utf8'))
+  assert.equal(body.data.playground_dir, expected)
+  const saved = JSON.parse(fs.readFileSync(path.join(temp, '.sgen', 'dsh-plugin.json'), 'utf8'))
+  assert.equal(saved.playground_dir, expected)
+  const restored = normalizeConfig({}, { here: path.join(temp, 'plugin', 'lib') })
+  assert.equal(restored.playgroundDir, expected, '重新加载插件后应恢复目录')
+})
+
+test('试验场生成视频并校验时长参数，空提示词不启动 CLI', async (t) => {
+  const { ctx, historyFile, argsFile } = setup(t)
+  async function post(payload) {
+    const request = Readable.from([JSON.stringify(payload)])
+    request.method = 'POST'
+    request.url = '/sgen/generate'
+    request.headers = { host: '127.0.0.1:12345', 'content-type': 'application/json' }
+    const response = new CaptureResponse()
+    await ctx.routes.get('/sgen/generate').handler(request, response)
+    await response.finished
+    return response
+  }
+
+  const response = await post({ kind: 'video', prompt: '试验场视频', model: 'fake-video-model', seconds: 8 })
+  assert.equal(response.statusCode, 200)
+  const body = JSON.parse(response.body.toString('utf8'))
+  assert.equal(body.item.kind, 'video')
+  assert.equal(body.item.seconds, 8)
+  assert.equal(readHistory(historyFile).length, 1)
+  const argv = readArgs(argsFile).find((args) => args[0] === 'video')
+  assert.equal(argv[argv.indexOf('--seconds') + 1], '8')
+
+  const before = readArgs(argsFile).length
+  const invalid = await post({ kind: 'image', prompt: '  ' })
+  assert.equal(invalid.statusCode, 400)
+  assert.equal(readArgs(argsFile).length, before)
 })
 
 test('面板路由返回状态和图片字节，并拒绝非同源请求', async (t) => {

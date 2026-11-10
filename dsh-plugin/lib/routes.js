@@ -1,9 +1,12 @@
 /**
- * dsh-sgen 的只读 HTTP 路由，供侧栏面板读取状态和作品文件。
+ * dsh-sgen 的 HTTP 路由，供侧栏试验、读取状态、保存配置和读取作品文件。
  *
- * 两条路由都只允许本机同源访问：
- *   - GET /sgen/state  面板数据（配置摘要 + 作品索引，不含 Key）
- *   - GET /sgen/file   ?id=<作品 id>，按索引返回文件，支持视频 Range
+ * 路由都只允许本机同源访问：
+ *   - GET /sgen/state    面板数据（配置摘要 + 模型目录 + 作品索引，不含 Key）
+ *   - POST /sgen/config  保存面板配置，Key 仅用于本次写入
+ *   - POST /sgen/generate 试验场生成，产物登记到历史
+ *   - GET /sgen/file     ?id=<作品 id>，按索引返回文件，支持视频 Range
+ *   - DELETE /sgen/file  ?id=<作品 id>，删除文件和对应索引
  *
  * @module dsh-sgen/routes
  */
@@ -13,6 +16,8 @@ import fsp from 'node:fs/promises'
 import path from 'node:path'
 import { isLoopbackHost } from './config.js'
 import { readPanelState } from './history.js'
+import { runPlayground } from './playground.js'
+import { savePanelSettings, savePlaygroundDir } from './settings.js'
 
 const MEDIA_BY_EXT = {
   '.png': 'image/png',
@@ -117,7 +122,7 @@ function registerFileRoute(webServer, history, isSameOrigin) {
     kind: 'exact',
     path: '/sgen/file',
     handler: async (request, response) => {
-      if (request.method !== 'GET' && request.method !== 'HEAD') {
+      if (!['GET', 'HEAD', 'DELETE'].includes(request.method)) {
         sendJson(response, 405, { ok: false, error: 'method not allowed' })
         return
       }
@@ -139,8 +144,25 @@ function registerFileRoute(webServer, history, isSameOrigin) {
       }
 
       const item = await history.get(id)
+      if (!item && request.method === 'DELETE') {
+        sendJson(response, 200, { ok: true, id, already_deleted: true })
+        return
+      }
       if (!item) {
         sendJson(response, 404, { ok: false, error: '作品不存在或索引已清理' })
+        return
+      }
+      if (request.method === 'DELETE') {
+        try {
+          await fsp.unlink(item.file)
+        } catch (error) {
+          if (error.code !== 'ENOENT') {
+            sendJson(response, 500, { ok: false, error: `删除产物文件失败：${error.message}` })
+            return
+          }
+        }
+        await history.remove(id)
+        sendJson(response, 200, { ok: true, id })
         return
       }
       let stat
@@ -227,6 +249,83 @@ function registerStateRoute(webServer, config, history, isSameOrigin) {
   })
 }
 
+async function readJsonBody(request, limit = 65_536) {
+  const chunks = []
+  let size = 0
+  for await (const chunk of request) {
+    size += chunk.length
+    if (size > limit) {
+      throw Object.assign(new Error('请求内容过大'), { statusCode: 413 })
+    }
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk)
+  }
+  try {
+    return JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}')
+  } catch {
+    throw Object.assign(new Error('配置内容不是有效的 JSON'), { statusCode: 400 })
+  }
+}
+
+function registerConfigRoute(webServer, config, history, isSameOrigin) {
+  return webServer.register({
+    kind: 'exact',
+    path: '/sgen/config',
+    handler: async (request, response) => {
+      if (request.method !== 'POST') {
+        sendJson(response, 405, { ok: false, error: 'method not allowed' })
+        return
+      }
+      if (!isSameOrigin(request)) {
+        sendJson(response, 403, { ok: false, error: '仅允许本机同源保存 sgen 配置' })
+        return
+      }
+      try {
+        const input = await readJsonBody(request)
+        if (input && input.playground_dir !== undefined) await savePlaygroundDir(config, input.playground_dir)
+        else await savePanelSettings(config, input)
+        const data = await readPanelState(config, history)
+        sendJson(response, 200, { ok: true, data })
+      } catch (error) {
+        const status = error.statusCode ?? (error.code === 2 ? 400 : 500)
+        sendJson(response, status, { ok: false, error: String(error?.message || error) })
+      }
+    },
+  })
+}
+
+function registerPlaygroundRoute(webServer, config, history, isSameOrigin) {
+  return webServer.register({
+    kind: 'exact',
+    path: '/sgen/generate',
+    handler: async (request, response) => {
+      if (request.method !== 'POST') {
+        sendJson(response, 405, { ok: false, error: 'method not allowed' })
+        return
+      }
+      if (!isSameOrigin(request)) {
+        sendJson(response, 403, { ok: false, error: '仅允许本机同源使用 sgen 试验场' })
+        return
+      }
+      const controller = new AbortController()
+      const onClose = () => {
+        if (!response.writableEnded) controller.abort()
+      }
+      response.once('close', onClose)
+      try {
+        const input = await readJsonBody(request, 48 * 1024 * 1024)
+        const result = await runPlayground(config, history, input, { signal: controller.signal })
+        sendJson(response, 200, { ok: true, ...result })
+      } catch (error) {
+        if (response.destroyed || response.writableEnded) return
+        const status = error.statusCode ?? (error.code === 2 ? 400 : 500)
+        sendJson(response, status, { ok: false, error: String(error?.message || error) })
+      } finally {
+        response.removeListener('close', onClose)
+      }
+    },
+  })
+}
+
 /**
  * @param {any} ctx
  * @param {ReturnType<import('./config.js').normalizeConfig>} config
@@ -242,6 +341,8 @@ export function registerRoutes(ctx, config, history) {
     const isSameOrigin = createOriginCheck(webServer)
     const disposers = [
       registerStateRoute(webServer, config, history, isSameOrigin),
+      registerConfigRoute(webServer, config, history, isSameOrigin),
+      registerPlaygroundRoute(webServer, config, history, isSameOrigin),
       registerFileRoute(webServer, history, isSameOrigin),
     ]
     webCtx.effect(
@@ -256,7 +357,7 @@ export function registerRoutes(ctx, config, history) {
       },
       'sgen: panel routes',
     )
-    ctx.logger?.info?.('[sgen] 已注册面板路由 GET /sgen/state、GET /sgen/file')
+    ctx.logger?.info?.('[sgen] 已注册面板路由 GET /sgen/state、POST /sgen/config、POST /sgen/generate、GET /sgen/file')
     return disposers
   }
   return typeof ctx.inject === 'function' ? ctx.inject(['webServer'], mount) : mount(ctx)

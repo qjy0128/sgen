@@ -131,6 +131,18 @@ test('config list：Key 打码显示，不泄露完整 Key', async () => {
     assert.match(r.stdout, /international/)
     assert.match(r.stdout, /商汤/)
     assert.match(r.stdout, /Agnes/)
+
+    const jsonRun = await run(['config', 'list', '--json'], { env: { HOME: home.dir } })
+    assert.equal(jsonRun.code, 0)
+    const summary = JSON.parse(jsonRun.stdout)
+    assert.equal(summary.ok, true)
+    assert.equal(summary.providers.sensenova.keys, 1)
+    assert.equal(summary.providers.agnes.keys, 1)
+    assert.equal(summary.providers.sensenova.base_url, 'https://token.sensenova.cn/v1')
+    assert.equal(summary.default_models.image, 'sensenova-u1.5-lite')
+    assert.equal(summary.default_models.video, 'agnes-video-2.5-flash')
+    assert.ok(!jsonRun.stdout.includes('sk-aaaaaaabbbbbbbb'))
+    assert.ok(!jsonRun.stdout.includes('ak-ccccccccdddddddd'))
   } finally {
     home.cleanup()
   }
@@ -154,6 +166,65 @@ test('config set：region 切换（含提醒）、api_keys 逗号转数组、非
     const r4 = await run(['config', 'set', 'agnes.base_url', 'file:///tmp/api'], { env: { HOME: home.dir } })
     assert.equal(r4.code, 2)
     assert.match(r4.stderr, /http/)
+  } finally {
+    home.cleanup()
+  }
+})
+
+test('config set：一次保存多项，空值恢复默认，校验失败不写入', async () => {
+  const home = tmpDir('sgen-home-')
+  try {
+    writeConfig(home.dir, { agnes: { api_keys: ['ak-old'], base_url: 'https://old.example.com/v1' } })
+    const saved = await run([
+      'config',
+      'set',
+      'agnes.api_keys',
+      'ak-new-1,ak-new-2',
+      'agnes.base_url',
+      'https://new.example.com/v1/',
+      'default_image_model',
+      'agnes-image-2.5-flash',
+      'default_video_model',
+      'agnes-video-2.5-flash',
+    ], { env: { HOME: home.dir } })
+    assert.equal(saved.code, 0)
+    let config = readConfig(home.dir)
+    assert.deepEqual(config.providers.agnes.api_keys, ['ak-new-1', 'ak-new-2'])
+    assert.equal(config.providers.agnes.base_url, 'https://new.example.com/v1')
+    assert.equal(config.default_image_model, 'agnes-image-2.5-flash')
+    assert.equal(config.default_video_model, 'agnes-video-2.5-flash')
+
+    const rejected = await run([
+      'config',
+      'set',
+      'agnes.base_url',
+      'https://should-not-save.example.com/v1',
+      'default_image_model',
+      'agnes-video-2.5-flash',
+    ], { env: { HOME: home.dir } })
+    assert.equal(rejected.code, 2)
+    config = readConfig(home.dir)
+    assert.equal(config.providers.agnes.base_url, 'https://new.example.com/v1')
+    assert.equal(config.default_image_model, 'agnes-image-2.5-flash')
+
+    const reset = await run([
+      'config',
+      'set',
+      'agnes.api_keys',
+      '',
+      'agnes.base_url',
+      '',
+      'default_image_model',
+      '',
+      'default_video_model',
+      '',
+    ], { env: { HOME: home.dir } })
+    assert.equal(reset.code, 0)
+    config = readConfig(home.dir)
+    assert.deepEqual(config.providers.agnes.api_keys, [], '显式传空 Key 列表时才清空')
+    assert.equal(config.providers.agnes.base_url, undefined)
+    assert.equal(config.default_image_model, undefined)
+    assert.equal(config.default_video_model, undefined)
   } finally {
     home.cleanup()
   }

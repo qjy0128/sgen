@@ -19,6 +19,7 @@ export const DEFAULTS = {
   sgenBin: '',
   nodePath: '',
   historyFile: '',
+  playgroundDir: '',
   maxHistory: 100,
   updateCheck: false,
   defaultCwd: '',
@@ -35,6 +36,19 @@ export function expandHome(value) {
     return path.join(os.homedir(), value.slice(2))
   }
   return value
+}
+
+export function pluginSettingsPath() {
+  return path.join(os.homedir(), '.sgen', 'dsh-plugin.json')
+}
+
+export function readPluginSettings() {
+  try {
+    const value = JSON.parse(fs.readFileSync(pluginSettingsPath(), 'utf8'))
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {}
+  } catch {
+    return {}
+  }
 }
 
 /** 把未知配置值收敛为字符串；空串表示“用默认值”。 */
@@ -133,6 +147,10 @@ export function normalizeConfig(raw, { here }) {
   const historyFile = text(input.historyFile)
     ? path.resolve(expandHome(text(input.historyFile)))
     : path.join(os.homedir(), '.sgen', 'dsh-gallery.json')
+  const configuredPlaygroundDir = text(input.playgroundDir) || text(readPluginSettings().playground_dir)
+  const playgroundDir = configuredPlaygroundDir
+    ? path.resolve(expandHome(configuredPlaygroundDir))
+    : path.join(os.homedir(), 'sgen')
   const defaultCwd = text(input.defaultCwd)
     ? path.resolve(expandHome(text(input.defaultCwd)))
     : ''
@@ -152,6 +170,7 @@ export function normalizeConfig(raw, { here }) {
     sgenBin,
     nodePath,
     historyFile,
+    playgroundDir,
     maxHistory: Math.min(1000, positiveInteger(input.maxHistory, DEFAULTS.maxHistory)),
     updateCheck,
     defaultCwd,
