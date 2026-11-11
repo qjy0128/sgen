@@ -1,15 +1,33 @@
 {
   "name": "sgen",
-  "version": "0.6.0",
-  "description": "面向 Agent 的免费生图/生视频命令行工具（商汤 SenseNova + Agnes）",
+  "version": "0.6.1",
+  "description": "面向 Agent 的免费生图/生视频命令行工具与 DeepSeek Harness 插件（商汤 SenseNova + Agnes）",
   "type": "module",
   "bin": {
     "sgen": "bin/sgen.js"
+  },
+  "main": "./dsh-plugin/lib/index.js",
+  "exports": {
+    ".": "./dsh-plugin/lib/index.js",
+    "./client": "./dsh-plugin/lib/client.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./dsh-plugin/locale/*.json",
+    "./icon": "./dsh-plugin/icon.svg"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
   },
   "files": [
     "bin",
     "src",
     "skill",
+    "cordis.patch.yml",
     "dsh-plugin/lib",
     "dsh-plugin/locale",
     "dsh-plugin/icon.svg",
@@ -26,6 +44,8 @@
     "video-generation",
     "cli",
     "agent",
+    "dsh",
+    "dsh-plugin",
     "sensenova",
     "agnes"
   ],
@@ -37,7 +57,8 @@
     "check": "npm run check:syntax && npm run check:docs && npm test && npm run test:dsh-plugin"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22",
+    "dsh": ">=0.2.1-rc.1 <0.3.0-0"
   },
   "license": "MIT"
 }

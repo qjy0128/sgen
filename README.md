@@ -206,7 +206,13 @@ sgen config init|set|list|test # 配置管理
 
 本机已完成全部接入（技能正本在 `~/.agents/skills/sgen/`，各工具按约定软链/写规则）。逐工具说明、WorkBuddy 的手动接入法、沙箱网络放行清单见 **[docs/agent-integration.md](docs/agent-integration.md)**。技能源文件改动后运行 `scripts/install-skill` 一键同步。
 
-**DeepSeek Harness（DSH）插件**：仓库附带 `dsh-plugin/`（包名 `dsh-sgen`），把免费生图/生视频做成 5 个 DSH 原生工具、`sgen` 运行时技能和侧栏作品面板；安装、配置、安全边界与卸载见 **[dsh-plugin/README.md](dsh-plugin/README.md)**。
+**DeepSeek Harness（DSH）插件**：同一个根包同时包含 SGeN CLI 和 DSH 插件（试验场 / 配置 / 产物三 Tab、5 个 DSH 原生工具与 `sgen` 运行时技能），可直接从 GitHub Release 安装：
+
+```bash
+dsh plugin --profile desktop add https://github.com/qjy0128/sgen/releases/latest/download/sgen-dsh-plugin.tgz
+```
+
+配置、安全边界、开发安装与卸载见 **[dsh-plugin/README.md](dsh-plugin/README.md)**。
 
 ## 重要说明
 

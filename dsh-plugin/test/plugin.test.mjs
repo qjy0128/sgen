@@ -5,7 +5,7 @@ import path from 'node:path'
 import { Readable, Writable } from 'node:stream'
 import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
-import { normalizeConfig } from '../lib/config.js'
+import { normalizeConfig, resolveCommand } from '../lib/config.js'
 import { apply } from '../lib/index.js'
 
 const HERE = path.dirname(fileURLToPath(import.meta.url))
@@ -636,6 +636,27 @@ test('作品索引按文件去重并遵守 maxHistory', async (t) => {
   assert.equal(items.length, 2)
   assert.equal(items[0].file, path.resolve(a))
   assert.equal(items[0].prompt, 'a again')
+})
+
+test('Market 安装后可从同目录 sgen 依赖定位 CLI', (t) => {
+  const { temp } = setup(t)
+  const oldRoot = process.env.SGEN_ROOT
+  delete process.env.SGEN_ROOT
+  t.after(() => {
+    if (oldRoot === undefined) delete process.env.SGEN_ROOT
+    else process.env.SGEN_ROOT = oldRoot
+  })
+  const modules = path.join(temp, 'node_modules')
+  const pluginRoot = path.join(modules, 'dsh-sgen')
+  const sgenRoot = path.join(modules, 'sgen')
+  fs.mkdirSync(path.join(pluginRoot, 'lib'), { recursive: true })
+  fs.mkdirSync(path.join(sgenRoot, 'bin'), { recursive: true })
+  fs.writeFileSync(path.join(sgenRoot, 'bin', 'sgen.js'), '// cli\n')
+  fs.writeFileSync(path.join(sgenRoot, 'package.json'), '{"name":"sgen"}\n')
+
+  const config = normalizeConfig({}, { here: path.join(pluginRoot, 'lib') })
+  assert.equal(config.sgenRoot, sgenRoot)
+  assert.equal(resolveCommand(config).prefix[0], path.join(sgenRoot, 'bin', 'sgen.js'))
 })
 
 test('提示词为空时本地报错，不启动 CLI', async (t) => {

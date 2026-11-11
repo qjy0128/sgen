@@ -1,0 +1,12 @@
+# SGeN bundle patch（仓库根包 = CLI + DSH 插件）。
+#
+# 插入一个宿主行，提供：
+#   - sgen_image / sgen_video / sgen_status / sgen_models / sgen_config 原生工具；
+#   - 运行时技能 sgen（正文来自 skill/sgen/SKILL.md）；
+#   - GET /sgen/state、POST /sgen/config、POST /sgen/generate、GET/DELETE /sgen/file。
+#
+# 需要覆盖插件参数时可在用户 patch 层按同一个 id 写 config。
+- insert:
+    - id: sgen
+      name: sgen
+      config: {}

@@ -11,52 +11,36 @@
 
 ## 安装
 
-插件以 DSH bundle 形式发布（`dsh.bundle.patch` 指向 `cordis.patch.yml`）。在 DSH 里用插件管理器安装本地路径：
+推荐用 GitHub Release 里的预构建包（同一个包同时包含 SGeN CLI 和 DSH 插件）：
+
+```bash
+dsh plugin --profile desktop add https://github.com/qjy0128/sgen/releases/latest/download/sgen-dsh-plugin.tgz
+```
+
+也可以直接从仓库安装：
+
+```bash
+dsh plugin --profile desktop add https://github.com/qjy0128/sgen
+```
+
+安装后重启或刷新 DSH：
+
+1. 新会话的工具列表出现 `sgen_*`；
+2. 会话技能目录出现 `sgen`；
+3. 侧栏出现 `sgen` 工作台。
+
+`:latest` 安装会随 Release 更新；离线分发时下载 `sgen-dsh-plugin.tgz` 后把路径传给同一条 `dsh plugin add` 命令即可。插件依赖的 SGeN CLI 已包含在安装包内，不需要单独全局安装或克隆仓库。
+
+> 安装/卸载会修改 DSH profile 下的 manifest 与 patch，需要 DSH 的
+> danger-full-access 或一次显式批准。宿主代码在 DSH 进程内运行，不在工作区沙箱里。
+
+### 本地开发安装
 
 ```text
 plugin_manager install_bundle /Users/qjy0128/Coding/sgen/dsh-plugin
 ```
 
-安装后 bundle 会追加到 `~/.dsh/profiles/desktop/package.json` 的 `dsh.profile.bundles`，
-`cordis.patch.yml` 的 `insert` 行会挂载 `sgen` 插件。
-
-安装后：
-
-1. 新会话的工具列表出现 `sgen_*`；
-2. 会话技能目录出现 `sgen`；
-3. 侧栏出现 `sgen` 作品面板（新安装的 bundle 可能需要刷新一次页面）。
-
-> 安装/卸载会修改 `~/.dsh/profiles/desktop` 下的 manifest 与 patch，需要 DSH 的
-> danger-full-access 或一次显式批准。宿主代码在 DSH 进程内运行，不在工作区沙箱里。
-
-### 手动安装（插件管理器不可用时）
-
-编辑 `~/.dsh/profiles/desktop/package.json`：
-
-```json
-{
-  "dependencies": {
-    "dsh-sgen": "link:/Users/qjy0128/Coding/sgen/dsh-plugin"
-  },
-  "dsh": {
-    "profile": {
-      "bundles": [
-        "@deepseek-ai/dsh-base",
-        "@deepseek-ai/dsh-web-app",
-        "dsh-sgen"
-      ]
-    }
-  }
-}
-```
-
-然后在 profile 目录安装并重启 DSH（pnpm 路径以本机安装版本为准）：
-
-```bash
-cd ~/.dsh/profiles/desktop
-"/Applications/DeepSeek Harness.app/Contents/Resources/runtime/bin/node" \
-  "/Applications/DeepSeek Harness.app/Contents/Resources/runtime/pnpm/bin/pnpm.cjs" install
-```
+本地开发仍可直接链接 `dsh-plugin/`；正式用户应安装上面的根包 Release。
 
 ## 试验场
 

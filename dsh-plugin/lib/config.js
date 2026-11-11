@@ -101,7 +101,7 @@ function rootFromPath() {
 
 /**
  * 解析 SGeN 仓库根目录。
- * 优先级：显式配置 > SGEN_ROOT 环境变量 > 插件所在仓库 > PATH 里的 sgen > ~/Coding/sgen。
+ * 优先级：显式配置 > SGEN_ROOT 环境变量 > 插件所在仓库 > 同目录安装的 sgen 依赖 > PATH 里的 sgen > ~/Coding/sgen。
  */
 export function resolveSgenRoot(rawValue, packageRoot) {
   const explicit = text(rawValue)
@@ -112,6 +112,9 @@ export function resolveSgenRoot(rawValue, packageRoot) {
 
   const fromPackage = path.resolve(packageRoot, '..')
   if (isSgenRoot(fromPackage)) return fromPackage
+
+  const fromDependency = path.resolve(packageRoot, '..', 'sgen')
+  if (isSgenRoot(fromDependency)) return fromDependency
 
   const fromPath = rootFromPath()
   if (fromPath) return fromPath
